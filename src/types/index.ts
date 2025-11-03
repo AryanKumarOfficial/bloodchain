@@ -1,4 +1,4 @@
-import {UserRole,BloodType} from "@/generated/prisma"
+import {BloodType, UserRole} from "@/generated/prisma"
 
 
 export enum RhFactor {
@@ -247,19 +247,13 @@ export interface IModelTrainingConfig {
     batchSize: number
     learningRate: number
     validationSplit: number
-    trainingsamples: number
+    trainingSamples: number
     testSamples: number
 }
 
 
 export interface ITrainingHistory {
-    epoch: number
-    loss: number
-    accuracy: number
-    precision: number
-    recall: number
-    valLoss: number
-    valAccuracy: number
+    [metric: string]: number[]
 }
 
 export interface IModelEvaluation {
@@ -267,7 +261,7 @@ export interface IModelEvaluation {
     accuracy: number
     precision: number
     recall: number
-    f1Score: number
+    f1Score: number //
     confusionMatrix: number[][]
 }
 
