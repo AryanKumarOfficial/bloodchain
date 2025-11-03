@@ -37,13 +37,13 @@ export default function HomePage(): JSX.Element {
 
                 <div className="flex gap-4 justify-center">
                     <Link
-                        href="/auth/signin"
+                        href="/signin"
                         className="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-lg font-semibold transition"
                     >
                         Sign In
                     </Link>
                     <Link
-                        href="/auth/signup"
+                        href="/signup"
                         className="border-2 border-red-600 text-red-600 hover:bg-red-50 px-8 py-3 rounded-lg font-semibold transition"
                     >
                         Sign Up

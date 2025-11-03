@@ -1,33 +1,14 @@
 // lib/utils/logger.ts
 
-import fs from 'fs'
-import path from 'path'
+import { LogLevel,ILogEntry } from '@/types/logger'
+import fs from 'node:fs'
+import path from 'node:path'
 
 /**
  * COMPREHENSIVE LOGGING SERVICE
  * Structured logging for an entire platform
  */
 
-export enum LogLevel {
-    DEBUG = 'DEBUG',
-    INFO = 'INFO',
-    WARN = 'WARN',
-    ERROR = 'ERROR',
-    CRITICAL = 'CRITICAL',
-}
-
-export interface ILogEntry {
-    timestamp: Date
-    level: LogLevel
-    service: string
-    message: string
-    data?: Record<string, any>
-    error?: {
-        name: string
-        message: string
-        stack?: string
-    }
-}
 
 export class Logger {
     private service: string
