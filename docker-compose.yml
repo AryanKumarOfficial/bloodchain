@@ -1,20 +1,88 @@
+version: '3.9'
+
 services:
-  db:
-    image: postgres:15
-    restart: always
+  # PostgreSQL with PostGIS
+  postgresql:
+    image: postgis/postgis:15-3.3
+    container_name: bloodchain
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-bloodchain}
     ports:
       - "5432:5432"
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: bloodchain
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL","pg_isready -U postgres" ]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+    networks:
+      - bloodchain-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: bloodchain-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bloodchain-network
+
+  # Ganache (Local Blockchain)
+  ganache:
+    image: trufflesuite/ganache:latest
+    container_name: bloodchain-ganache
+    ports:
+      - "8545:8545"
+    volumes:
+      - ganache_data:/data
+    command: ganache-cli --host 0.0.0.0 --deterministic --accounts=10 --mnemonic "test test test test test test test test test test test junk"
+    networks:
+      - bloodchain-network
+
+  # Next.js Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bloodchain-app
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${DB_USER:-bloodchain}:${DB_PASSWORD:-bloodchain}@postgresql:5432/${DB_NAME:-bloodchain}
+      - REDIS_URL=redis://redis:6379
+      - ETHEREUM_RPC_URL=http://ganache:8545
+      - TAUTH_URL=http://localhost:3000
+      - TAUTH_SECRET=${AUTH_SECRET}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ganache:
+        condition: service_started
+    volumes:
+      - ./:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - bloodchain-network
+
+networks:
+  bloodchain-network:
+    driver: bridge
 
 volumes:
-  db_data:
+  postgres_data:
+  redis_data:
+  ganache_data:
