@@ -4,7 +4,6 @@
 
 import {useSession} from 'next-auth/react'
 import {JSX, useEffect, useState} from 'react'
-import {useRouter} from 'next/navigation'
 import {logToServer} from "@/lib/actions/log.action";
 import {LogLevel} from "@/types/logger";
 
@@ -17,7 +16,6 @@ interface DashboardStats {
 
 export default function DashboardPage(): JSX.Element {
     const {data: session, status} = useSession()
-    const router = useRouter()
     const [stats, setStats] = useState<DashboardStats>({
         activeRequests: 0,
         matchedDonors: 0,
@@ -27,15 +25,8 @@ export default function DashboardPage(): JSX.Element {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        if (status === 'unauthenticated') {
-            router.push('/auth/signin')
-            return
-        }
-
-        if (status === 'authenticated') {
-            fetchDashboardData()
-        }
-    }, [status])
+        fetchDashboardData()
+    }, [])
 
     const fetchDashboardData = async (): Promise<void> => {
         try {
@@ -51,7 +42,7 @@ export default function DashboardPage(): JSX.Element {
 
             await logToServer(LogLevel.INFO, "Dashboard data fetched")
         } catch (error) {
-            await logToServer(LogLevel.ERROR, "Failed to fetch dashboard data",{error})
+            await logToServer(LogLevel.ERROR, "Failed to fetch dashboard data", {error})
         } finally {
             setLoading(false)
         }
@@ -64,10 +55,15 @@ export default function DashboardPage(): JSX.Element {
             </div>
         )
     }
-
-    if (status === 'unauthenticated') {
-        return <div>Redirecting to sign in...</div>
-    }
+    //
+    // if (status === 'unauthenticated') {
+    //     return (<>
+    //         <div>Redirecting to sign in...</div>
+    //         <p>
+    //             {session?.user?.name}
+    //         </p>
+    //     </>)
+    // }
 
     return (
         <div className="p-8 bg-gray-50 min-h-screen">

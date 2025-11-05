@@ -30,6 +30,7 @@ export const authOptions: NextAuthOptions = {
                     email: profile.email,
                     role: UserRole.DONOR, // Use the Enum
                     verificationStatus: VerificationStatus.PENDING, // Use the Enum
+                    blockedFromPlatform: false
                 }
             },
         }),

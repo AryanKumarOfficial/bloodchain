@@ -2,8 +2,8 @@
 
 'use client'
 
-import {signIn} from 'next-auth/react'
-import {FormEvent, JSX, useState} from 'react'
+import {signIn, useSession} from 'next-auth/react'
+import {FormEvent, JSX, useEffect, useState} from 'react'
 import {useRouter} from 'next/navigation'
 import Link from 'next/link'
 import {LogLevel} from '@/types/logger'
@@ -15,6 +15,13 @@ export default function SignInPage(): JSX.Element {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
     const router = useRouter()
+    const {data: session, status} = useSession()
+
+    useEffect(() => {
+        if (status === 'authenticated') {
+            router.push('/dashboard')
+        }
+    })
 
     const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
         e.preventDefault()
