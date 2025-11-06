@@ -12,6 +12,7 @@ export class BlockchainService {
     private provider: ethers.Provider | null = null
     private signer: Signer | null = null
     private contract: Contract | null = null
+    private tokenContract: Contract | null = null
     private config: IBlockchainConfig
 
     constructor(config?: IBlockchainConfig) {
@@ -39,7 +40,7 @@ export class BlockchainService {
             this.signer = new ethers.Wallet(this.config.privateKey, this.provider)
 
             // Create contract instance
-            const abi = [
+            const mainAbi = [
                 'function recordDonationWithAutoVerification(uint256 requestId, address donor, uint26 unitsCollected, string memory ipfsProof, address[] memory verifiers, bytes[] memory signatures) external',
                 'function createBloodRequest(string memory bloodType, uint256 unitsNeeded, uint256 urgencyLevel, string memory medicalProofIPFS, uint256 expirationTime) external',
                 'function detectAndReportFraud(address user, string memory fraudType, address[] memory witnesses) external',
@@ -47,9 +48,19 @@ export class BlockchainService {
 
             this.contract = new ethers.Contract(
                 this.config.contractAddress,
-                abi,
+                mainAbi,
                 this.signer
             )
+
+            const tokenAbi = [
+                'function transfer(address to, uint256 amount) external returns (bool)'
+            ];
+
+            this.tokenContract = new ethers.Contract(
+                this.config.tokenAddress,
+                tokenAbi,
+                this.signer
+            );
 
             // Verify connection
             const network = await this.provider.getNetwork()
@@ -62,6 +73,49 @@ export class BlockchainService {
             throw new BlockchainError('Failed to initialize blockchain connection')
         }
     }
+
+    /**
+     * Transfer ERC-20 reward tokens to a user
+     * @param toAddress The recipient's wallet address
+     * @param amount The number of whole tokens to send
+     * @returns Transaction hash
+     */
+
+    async transferTokens(toAddress: string, amount: number): Promise<string> {
+        try {
+            if (!this.tokenContract || !this.signer) {
+                await this.initialize();
+            }
+            // Assuming the token uses 18 decimals, like most ERC-20 tokens
+            // This converts "100" tokens to "100000000000000000000" (100 * 10^18)
+            const txAmount = ethers.parseUnits(amount.toString(), 18);
+
+            this.logger.info('Transferring reward tokens', {
+                to: toAddress,
+                amount: amount,
+                amountWithDecimals: txAmount.toString()
+            });
+
+            const tx = await this.tokenContract!.transfer(
+                toAddress,
+                txAmount,
+                {gasLimit: this.config.gasLimit}
+            );
+
+            const receipt = await tx.wait();
+            const txHash = receipt?.hash || '';
+
+            this.logger.info('Token transfer successful', {
+                transactionHash: txHash,
+            });
+
+            return txHash;
+        } catch (error) {
+            this.logger.error('Failed to transfer tokens', error as Error);
+            throw new BlockchainError('Failed to transfer reward tokens');
+        }
+    }
+
 
     /**
      * Record donation on blockchain
@@ -215,10 +269,10 @@ export class BlockchainService {
 
             // This would call a view function on the contract
             // For now, returning mock data
-            return 500 // Mock reputation score
+            // return 500 // Mock reputation score
 
             // In production:
-            // return await this.contract!.getDonorProfile(donorAddress)
+            return await this.contract!.getDonorProfile(donorAddress)
         } catch (error) { // <<< THIS BRACE WAS MISSING
             this.logger.error('Failed to get donor reputation', error as Error)
             throw new BlockchainError('Failed to get donor reputation')

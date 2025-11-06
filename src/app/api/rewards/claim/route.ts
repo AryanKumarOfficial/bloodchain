@@ -52,6 +52,13 @@ export async function POST(request: NextRequest) {
             amount: pendingRewards,
         })
 
+        if (!donor.user.walletAddress) {
+            return NextResponse.json(
+                {error: 'Wallet address not found'},
+                {status: 400}
+            )
+        }
+
         const txHash = await blockchainService.transferTokens(
             donor.user.walletAddress,
             pendingRewards
