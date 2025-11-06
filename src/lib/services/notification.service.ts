@@ -4,7 +4,7 @@ import {Logger} from '@/lib/utils/logger'
 import {prisma} from '@/lib/prisma'
 import nodemailer from 'nodemailer'
 
-interface Notification {
+export interface Notification {
     userId: string
     type:
         | 'MATCH_FOUND'
@@ -12,6 +12,7 @@ interface Notification {
         | 'URGENT_REQUEST'
         | 'REWARD_ISSUED'
         | 'VERIFICATION_REQUIRED'
+        | 'USER_REGISTRATION'
     title: string
     message: string
     data?: Record<string, any>

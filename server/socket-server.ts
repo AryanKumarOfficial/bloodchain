@@ -174,12 +174,21 @@ export class SocketIOServer {
 
             // Donation completion
             socket.on('donation-completed', async (data: any) => {
-                // ... (existing logic is good) ...
                 try {
                     logger.info('Donation completed event', {
                         donationId: data.donationId,
                     })
-                    // ... (notify recipient, notify donor) ...
+                    // Notify recipient
+                    this.io.to(`recipient-${data.recipientId}`).emit('donation-complete-status', {
+                        donationId: data.donationId,
+                        message: 'Your request is complete!'
+                    });
+                    // Notify donor
+                    this.io.to(`donor-${data.donorId}`).emit('donation-complete-status', {
+                        donationId: data.donationId,
+                        reward: data.rewardAmount,
+                        message: 'Donation confirmed! Reward issued.'
+                    });
                 } catch (error) {
                     logger.error('Donation completion event error', error as Error)
                 }
