@@ -4,7 +4,7 @@ import {prisma} from '@/lib/prisma'
 import {Logger} from '@/lib/utils/logger'
 import {GeoUtil} from '@/lib/utils/geo-util'
 import * as tf from '@tensorflow/tfjs'
-import {BloodRequest, DonorProfile, RequestMatch} from '@/generated/prisma'
+import type {BloodRequest, Donation, DonorProfile, RequestMatch, User} from '@/generated/prisma'
 
 interface MatchingFeatures {
     bloodTypeScore: number
@@ -22,6 +22,16 @@ interface AutomatchResult {
     donorId: string
     score: number
     features: MatchingFeatures
+}
+
+// Extended types to match actual database structure
+type DonorProfileWithRelations = DonorProfile & {
+    user: User | null
+    donations: Donation[]
+}
+
+type BloodRequestWithRelations = BloodRequest & {
+    recipient: User | null
 }
 
 const logger = new Logger('MatchingService')
@@ -66,6 +76,7 @@ export class MatchingService {
             metrics: ['accuracy'],
         })
 
+        logger.info('✅ ML model built successfully')
         return model
     }
 
@@ -104,11 +115,16 @@ export class MatchingService {
                 take: 100,
             })
 
+            logger.info(`Found ${donors.length} eligible donors for request ${requestId}`)
+
             // Score each donor
             const results: AutomatchResult[] = []
 
             for (const donor of donors) {
-                const features = await this.extractFeatures(request, donor)
+                const features = await this.extractFeatures(
+                    request as BloodRequestWithRelations,
+                    donor as DonorProfileWithRelations
+                )
                 const score = await this.predictScore(features)
 
                 if (score > 0.65) {
@@ -122,44 +138,69 @@ export class MatchingService {
             }
 
             // Sort by score and return top matches
-            return results
+            const topMatches = results
                 .sort((a, b) => b.score - a.score)
                 .slice(0, maxResults)
+
+            logger.info(`Generated ${topMatches.length} top matches for request ${requestId}`)
+            return topMatches
         } catch (error) {
-            logger.error('Matching error: ' + (error as Error).message)
+            logger.error(
+                'Matching error:',
+                error instanceof Error ? error.message : String(error)
+            )
             return []
         }
     }
 
     private async extractFeatures(
-        request: BloodRequest & { recipient: any },
-        donor: DonorProfile & { user: any; donations: any[] }
+        request: BloodRequestWithRelations,
+        donor: DonorProfileWithRelations
     ): Promise<MatchingFeatures> {
+        // Calculate success rate
         const successRate =
             donor.donations.length > 0
                 ? donor.donations.filter((d) => d.status === 'COMPLETED').length /
                 donor.donations.length
                 : 0.5
 
-        const distance = request.latitude && request.longitude && donor.latitude && donor.longitude
-            ? GeoUtil.calculateDistance(
-                {latitude: request.latitude, longitude: request.longitude},
-                {latitude: donor.latitude, longitude: donor.longitude}
+        // Calculate distance (default to 0 if coordinates missing)
+        let distanceScore = 1.0
+        if (
+            request.latitude !== null &&
+            request.longitude !== null &&
+            donor.latitude !== null &&
+            donor.longitude !== null
+        ) {
+            const distance = GeoUtil.calculateDistance(
+                {
+                    latitude: request.latitude,
+                    longitude: request.longitude,
+                },
+                {
+                    latitude: donor.latitude,
+                    longitude: donor.longitude,
+                }
             )
-            : 0
+            distanceScore = Math.max(0, 1 - distance / 50) // 50km max radius
+        }
 
-        return {
+        // Extract features with null safety
+        const features: MatchingFeatures = {
             bloodTypeScore: 1.0, // Perfect match (already filtered)
-            distanceScore: Math.max(0, 1 - distance / 50), // 50km max radius
-            reputationScore: Math.min(donor.reputationScore / 100, 1),
+            distanceScore,
+            reputationScore: Math.min((donor.reputationScore || 500) / 1000, 1),
             availabilityScore: donor.isAvailable ? 1.0 : 0,
             urgencyScore: this.getUrgencyMultiplier(request.urgencyLevel),
             successRateScore: successRate,
-            responseTimeScore: donor.avgResponseTime
-                ? Math.max(0, 1 - donor.avgResponseTime / 3600)
-                : 0.8,
-            fraudRiskScore: 1 - Math.min(donor.fraudRiskScore / 100, 1),
+            responseTimeScore:
+                donor.avgResponseTime !== null
+                    ? Math.max(0, 1 - donor.avgResponseTime / 3600)
+                    : 0.8,
+            fraudRiskScore: 1 - Math.min((donor.fraudRiskScore || 0) / 100, 1),
         }
+
+        return features
     }
 
     private async predictScore(features: MatchingFeatures): Promise<number> {
@@ -190,27 +231,61 @@ export class MatchingService {
     async createMatches(results: AutomatchResult[]): Promise<RequestMatch[]> {
         try {
             const matches = await Promise.all(
-                results.map((result) =>
-                    prisma.requestMatch.create({
+                results.map((result) => {
+                    const [requestId] = result.matchId.split('-')
+                    return prisma.requestMatch.create({
                         data: {
-                            requestId: result.matchId.split('-')[0],
+                            requestId,
                             donorId: result.donorId,
                             compatibilityScore: result.features.bloodTypeScore,
                             distanceScore: result.features.distanceScore,
                             reputationScore: result.features.reputationScore,
                             availabilityScore: result.features.availabilityScore,
+                            urgencyScore: result.features.urgencyScore,
+                            successRateScore: result.features.successRateScore,
+                            responseTimeScore: result.features.responseTimeScore,
+                            fraudRiskScore: result.features.fraudRiskScore,
                             overallScore: result.score,
                             status: 'PENDING',
                             expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
                         },
                     })
-                )
+                })
             )
 
             logger.info(`✅ Created ${matches.length} matches`)
             return matches
         } catch (error) {
-            logger.error('Failed to create matches: ' + (error as Error).message)
+            logger.error(
+                'Failed to create matches:',
+                error instanceof Error ? error.message : String(error)
+            )
+            throw error
+        }
+    }
+
+    async getMatchStats(requestId: string): Promise<Record<string, any>> {
+        try {
+            const matches = await prisma.requestMatch.findMany({
+                where: {requestId},
+            })
+
+            const scores = matches.map((m) => m.overallScore)
+            const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length || 0
+
+            return {
+                totalMatches: matches.length,
+                averageScore: avgScore,
+                highQualityMatches: matches.filter((m) => m.overallScore > 0.8).length,
+                mediumQualityMatches: matches.filter(
+                    (m) => m.overallScore > 0.6 && m.overallScore <= 0.8
+                ).length,
+            }
+        } catch (error) {
+            logger.error(
+                'Failed to get match stats:',
+                error instanceof Error ? error.message : String(error)
+            )
             throw error
         }
     }
