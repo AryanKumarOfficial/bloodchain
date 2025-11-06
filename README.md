@@ -1,131 +1,121 @@
-# 🩸 Bloodchain
+# 🩸 Bloodchain [v1.0.0]
 
-[](LICENSE)
+**A decentralized, AI-powered, peer-to-peer blood donation platform.**
 
-> A decentralized platform connecting blood donors and patients.
+Bloodchain connects donors and recipients directly, eliminating hospital intermediaries. It uses AI for instant,
+high-quality matching and blockchain for transparent, trustless verification of donations, rewarding participants with
+tokens and NFT credentials.
 
------
+---
 
-## Table of Contents
+## ✨ Key Features
 
-- [Features](#features)
-- [Prerequisites](#prerequisites)
-- [Quickstart](#quickstart)
-- [Tech Stack](#tech-stack)
-- [System Design](#system-design)
-- [Documentation](#documentation)
-- [Community & Contributing](#community--contributing)
-- [License](#license)
+* [cite_start]**AI-Powered Matching:** A 10-feature TensorFlow.js model analyzes compatibility,
+  distance [cite: 157][cite_start], reputation [cite: 158][cite_start], and fraud risk [cite: 163] to find the best
+  donors instantly.
+* [cite_start]**Decentralized Verification:** A peer-to-peer network of verifiers can attest to donations, which are
+  then recorded immutably on the blockchain.
+* [cite_start]**Biometric Identity:** AI-powered facial recognition and liveness detection prevent fraud and ensure user
+  identity[cite: 183].
+* [cite_start]**Real-time Geolocation:** Donors and recipients can connect in real-time, with donors' live locations
+  used for precise, privacy-preserving matching within a specified radius[cite: 19].
+* [cite_start]**Tokenized Rewards:** Donors earn ERC-20 tokens for successful donations [cite: 311] [cite_start]and are
+  awarded soulbound NFT badges (ERC-721) for achievements[cite: 320].
 
------
-
-## ✨ Features
-
-> 🚧 This section is under active development. Stay tuned for updates\!
-
------
-
-## 📋 Prerequisites
-
-Before you begin, ensure you have the following tools installed on your system:
-
-- [Git](https://git-scm.com/)
-- [Node.js](https://nodejs.org/en) (v20 or later)
-- [pnpm](https://pnpm.io/)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (for running the PostgreSQL database)
-
------
-
-## 🚀 Quickstart
-
-Follow these steps to get your local development environment up and running.
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/aryankumarofficial/bloodchain.git
-cd bloodchain
-
-# 2. Install dependencies
-pnpm install
-
-# 3. Set up environment variables
-# (Copy the example file and then fill in your keys)
-cp .env.example .env.local
-
-# 4. start the docker desktop
-docker desktop start
-
-# 5. buid the container
-docker compose up --buid
-
-# 6. Set up and migrate the database
-# (This requires Docker Desktop to be running)
-npx prisma migrate dev
-
-# 7. Generate the Prisma Client
-npx prisma generate
-
-# 8. Start the development server
-pnpm dev
-
-# Your app should now be running at http://localhost:3000
-
-# 9. stop the docker services after work donw
-docker compose down -v
-```
-
------
+---
 
 ## 🛠️ Tech Stack
 
-This project uses a modern, type-safe stack:
+* **Framework:** Next.js 16 (App Router)
+* **Language:** TypeScript
+* **Database:** PostgreSQL (with Prisma ORM)
+* **Authentication:** NextAuth.js (Google & Credentials)
+* **AI/ML:** TensorFlow.js
+* **Blockchain:** Ethers.js (Polygon/Solidity)
+* **Real-time:** Socket.IO with a Redis Adapter
+* **Background Jobs:** Node.js cron jobs
+* **Deployment:** Docker Compose, Vercel
 
-- **Framework:** [Next.js](https://nextjs.org/) (App Router)
-- **Language:** [TypeScript](https://www.typescriptlang.org/)
-- **Backend:** Next.js API Routes
-- **Database:** [PostgreSQL](https://www.postgresql.org/)
-- **ORM:** [Prisma](https://www.prisma.io/)
-- **State Management:**
-  - **Client State:** [Redux Toolkit](https://redux-toolkit.js.org/) (for auth)
-  - **Server State:** [TanStack Query](https://tanstack.com/query/latest)
-- **UI:** [React 19](https://react.dev/) & [TailwindCSS](https://tailwindcss.com/)
-- **Form Handling:** [React Hook Form](https://react-hook-form.com/)
-- **Validation:** [Zod](https://zod.dev/)
-- **Email Service:** [Nodemailer](https://nodemailer.com/) (with Gmail SMTP)
-- **Deployment:** [Vercel](https://vercel.com/)
+---
 
------
+## 🚀 Production Deployment (Docker)
 
-## 🏗️ System Design
+The recommended way to run Bloodchain in production is with Docker Compose, which manages all required services.
 
-The following diagram illustrates the overall architecture of **Bloodchain**:
+**Prerequisites:**
 
-*(Diagram or description to be added)*
+* Docker & Docker Compose
+* Node.js v18+
+* `pnpm`
 
------
+### 1. Environment Setup
+
+Copy the example environment file. You **must** fill this file out with your production keys.
+
+```bash
+cp .env.local.example .env.local
+```
+
+**Key variables to set in** `.env.local`:
+
+* `DATABASE_URL`: Your PostgreSQL connection string.
+*
+* `REDIS_URL`: Your Redis connection string.
+*
+* `NEXTAUTH_SECRET`: A 32-byte secret (openssl rand -base64 32).
+*
+* `GOOGLE_CLIENT_ID` & `GOOGLE_CLIENT_SECRET`: For Google OAuth.
+*
+* `ETHEREUM_RPC_URL`: Your Polygon (or other EVM) RPC endpoint.
+*
+* `BLOCKCHAIN_SIGNER_PRIVATE_KEY`: Private key of the wallet that will sign transactions and issue rewards.
+
+### 2. Build & Launch
+
+This command will build the Next.js app, the Socket.IO server, and all Docker images, then launch the entire stack in
+detached mode.
+
+``` bash
+# 1. Install dependencies
+pnpm install
+
+# 2. Build the application locally first (for Dockerfile.socket)
+pnpm run build
+
+# 3. Launch all services
+docker-compose up -d
+```
+
+Your services are now running:
+
+* **Next.js App:** `http://localhost:3000`
+* **Socket.IO Server:** `http://localhost:3001`
+* **PostgreSQL:** `Port 5432`
+* **Redis:** `Port 6379`
+
+### 3. Database Migration
+
+After the services are up, run the production database migration.
+
+```bash
+# This runs the 'migrate deploy' command inside the 'app' container
+docker-compose exec app npx prisma migrate deploy
+```
+
+### 4. Train the AI Model
+
+You must train the model once (or load a pre-trained one) for the AI matching to work.
+
+```bash
+# This runs the training script inside the 'app' container
+docker-compose exec app npx ts-node scripts/train-model.ts
+```
+
+Your Bloodchain instance is now live and fully operational.
 
 ## 📚 Documentation
 
-> This project's documentation is actively being developed alongside the codebase.
-
-- [API Reference](docs/API.md)
-- [System Architecture](docs/ARCHITECTURE.md)
-- [Component Docs](docs/COMPONENTS.md)
-- [Contributing Guide](docs/CONTRIBUTING.md)
-- [Roadmap](docs/ROADMAP.md)
-
------
-
-## 🤝 Community & Contributing
-
-We welcome contributions\! Please read our [Contributing Guide](docs/CONTRIBUTING.md) and [Roadmap](docs/ROADMAP.md) for
-details on how to get started.
-
-- [Open Issues](https://github.com/aryankumarofficial/bloodchain/issues)
-- [Discussions](https://github.com/aryankumarofficial/bloodchain/discussions)
-
------
-
-## 📜 License
-
-This project is licensed under the MIT License. See [LICENSE](LICENSE.md) for details.
+* **Software Requirements (SRS):** `BLOODCHAIN_SRS.pdf`
+* **API Code Reference:** `BLOODCHAIN_API_CODE.md`
+* **Setup Guide:** `BLOODCHAIN_SETUP_GUIDE.md`
+* **Contributing:** `docs/CONTRIBUTING.md`
