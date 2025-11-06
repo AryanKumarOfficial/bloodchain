@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    // Node.js requires CommonJS
+    "outDir": "dist",
+    // Output to a 'dist' folder
+    "noEmit": false,
+    // We *do* want to emit JS files
+    "isolatedModules": false,
+    "target": "es2020"
+  },
+  "include": [
+    "server/**/*.ts",
+    "src/lib/**/*.ts",
+    "src/types/**/*.ts",
+    "src/generated/prisma/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "src/app",
+    "src/components"
+  ]
+}
