@@ -14,7 +14,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -30,7 +30,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -60,8 +60,9 @@ services:
       - DATABASE_URL=postgresql://${DB_USER:-bloodchain}:${DB_PASSWORD:-bloodchain}@postgresql:5432/${DB_NAME:-bloodchain}
       - REDIS_URL=redis://redis:6379
       - ETHEREUM_RPC_URL=http://ganache:8545
-      - TAUTH_URL=http://localhost:3000
-      - TAUTH_SECRET=${AUTH_SECRET}
+      - AUTH_SECRET=${AUTH_SECRET}
+      - AUTH_URL=http://localhost:3000
+      - NEXT_PUBLIC_SOCKET_URL=http://localhost:3001
     ports:
       - "3000:3000"
     depends_on:
@@ -75,6 +76,30 @@ services:
       - ./:/app
       - /app/node_modules
       - /app/.next
+    networks:
+      - bloodchain-network
+
+  socket:
+    build:
+      context: .
+      dockerfile: Dockerfile-socket
+    container_name: bloodchain-socket
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgresql:5432/${DB_NAME:-bloodchain}
+      - REDIS_URL=redis://redis:6379
+      - NEXT_PUBLIC_APP_URL=http://localhost:3000
+    ports:
+      - "3001:3001"
+
+    depends_on:
+      - postgresql
+      - redis
+      - app
+    volumes:
+      - ./:/app
+      - /app/node_modules
+      - /app/dist
     networks:
       - bloodchain-network
 
