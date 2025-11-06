@@ -42,6 +42,21 @@ enum TransactionStatus {
   REFUNDED
 }
 
+enum MatchStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  COMPLETED
+  EXPIRED
+}
+
+enum DonationStatus {
+  PENDING
+  IN_TRANSIT
+  COMPLETED
+  FAILED
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -100,6 +115,13 @@ model DonorProfile {
   bloodType BloodType
   rhFactor  String
 
+  // Location
+  latitude  Float?
+  longitude Float?
+  city      String?
+  state     String?
+  country   String?
+
   // Autonomous matching
   isAvailable      Boolean   @default(true)
   lastDonationDate DateTime?
@@ -110,6 +132,7 @@ model DonorProfile {
   totalSuccessfulDonations Int   @default(0)
   totalFailedMatches       Int   @default(0)
   avgResponseTime          Int? // seconds
+  reputationScore          Int   @default(500)
 
   // Blockchain Rewards
   nftBadgesIssued    String[] // Array of NFT token IDs
@@ -126,6 +149,8 @@ model DonorProfile {
   donations Donation[]
   matches   RequestMatch[]
 
+  @@index([bloodType])
+  @@index([isAvailable])
   @@map("donor_profiles")
 }
 
@@ -134,11 +159,23 @@ model RecipientProfile {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  medicalHistory      String? // Encrypted
-  emergencyContacts   String? // Encrypted
-  preferredDonorTypes String[] // Blood types preferred
+  // Medical Info
+  medicalHistory      String?
+  emergencyContacts   String?
+  preferredDonorTypes String[] @default([])
 
-  createdAt     DateTime       @default(now())
+  // Location
+  latitude  Float?
+  longitude Float?
+  city      String?
+  state     String?
+  country   String?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
   bloodRequests BloodRequest[]
 
   @@map("recipient_profiles")
@@ -149,10 +186,13 @@ model BloodRequest {
   recipientId String
   recipient   User   @relation(fields: [recipientId], references: [id], onDelete: Cascade)
 
-  bloodType    BloodType
-  rhFactor     String
-  unitsNeeded  Int
+  bloodType   BloodType
+  rhFactor    String
+  unitsNeeded Int
+
+  // Urgency & status
   urgencyLevel String // LOW, MEDIUM, HIGH, CRITICAL, EMERGENCY
+  status       RequestStatus @default(OPEN) // OPEN, MATCHED, FULFILLED, EXPIRED
 
   // P2P Location (Anonymous for privacy)
   latitude  Float?
@@ -160,7 +200,9 @@ model BloodRequest {
   radius    Int    @default(50) // km
 
   // Autonomous Verification
-  medicalProofIPFSHash  String? // Medical document on IPFS
+  medicalProofIPFSHash String? // Medical document on IPFS
+
+  // verification
   verificationStatus    VerificationStatus @default(PENDING)
   verifiedByPeers       String[] // Array of verifier user IDs
   requiredVerifications Int                @default(3) // Automatic multi-sig
@@ -170,7 +212,6 @@ model BloodRequest {
   transactionHash      String?
   isOnChain            Boolean @default(false)
 
-  status              String   @default("OPEN") // OPEN, MATCHED, FULFILLED, EXPIRED
   expiresAt           DateTime
   autoMatchingEnabled Boolean  @default(true)
 
@@ -183,9 +224,17 @@ model BloodRequest {
   RecipientProfile   RecipientProfile? @relation(fields: [recipientProfileId], references: [id])
   recipientProfileId String?
 
-  @@index([urgencyLevel])
   @@index([status])
+  @@index([bloodType])
+  @@index([urgencyLevel])
   @@map("blood_requests")
+}
+
+enum RequestStatus {
+  OPEN
+  MATCHED
+  FULFILLED
+  EXPIRED
 }
 
 model RequestMatch {
@@ -196,21 +245,27 @@ model RequestMatch {
   donorId String
   donor   User   @relation(fields: [donorId], references: [id], onDelete: Cascade)
 
-  // AI Matching Scores
+  // Matching Scores
   compatibilityScore Float @default(0)
   distanceScore      Float @default(0)
   reputationScore    Float @default(0)
+  availabilityScore  Float @default(0)
   urgencyScore       Float @default(0)
+  successRateScore   Float @default(0)
+  responseTimeScore  Float @default(0)
+  fraudRiskScore     Float @default(0)
+  overallScore       Float @default(0)
   overallAIScore     Float @default(0)
 
   // Blockchain Smart Contract
   escrowContractAddress String?
   escrowAmount          Float? // In tokens
 
-  status        String    @default("PENDING") // PENDING, ACCEPTED, REJECTED, COMPLETED, EXPIRED
   automatchedAt DateTime? // When AI matched them
   respondedAt   DateTime?
   expiresAt     DateTime
+
+  status MatchStatus @default(PENDING)
 
   createdAt DateTime @default(now())
 
@@ -245,7 +300,7 @@ model Donation {
   blockchainVerified Boolean @default(false)
 
   // Status
-  status              String  @default("PENDING") // PENDING, IN_TRANSIT, COLLECTED, TRANSFERRED, COMPLETED, FAILED
+  status              DonationStatus @default(PENDING) // PENDING, IN_TRANSIT, COLLECTED, TRANSFERRED, COMPLETED, FAILED
   completionProofIPFS String? // IPFS hash of completion proof
 
   // Autonomous Rewards
@@ -457,4 +512,45 @@ model VerificationToken {
 
   @@unique([identifier, token])
   @@map("verification_tokens")
+}
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+
+  type    String // MATCH_FOUND, DONATION_COMPLETED, etc
+  title   String
+  message String
+  data    String? // JSON data
+
+  read Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([read])
+  @@map("notifications")
+}
+
+model VerifierPool {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  // Qualification
+  qualificationScore      Float @default(0.5)
+  successfulVerifications Int   @default(0)
+  disputedVerifications   Int   @default(0)
+
+  // Blockchain
+  verifierCredential   String?
+  smartContractAddress String?
+
+  // Status
+  isActive Boolean @default(true)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("verifier_pool")
 }
