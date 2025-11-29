@@ -1,6 +1,6 @@
 // types/prisma-extended.ts
 
-import type {BloodRequest, Donation, DonorProfile, RecipientProfile, RequestMatch, User,} from '@/generated/prisma'
+import type {BloodRequest, Donation, DonorProfile, RecipientProfile, RequestMatch, User,} from '@prisma/client'
 
 /**
  * Extended Prisma Types

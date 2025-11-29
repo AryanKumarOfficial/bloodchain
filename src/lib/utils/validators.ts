@@ -1,7 +1,7 @@
 import {z} from 'zod'
 // Assuming these types are defined in a central types file
 import { UrgencyLevel, ValidationError} from '@/types'
-import {$Enums} from "@/generated/prisma";
+import {$Enums} from "@prisma/client";
 import UserRole = $Enums.UserRole;
 import BloodType = $Enums.BloodType;
 

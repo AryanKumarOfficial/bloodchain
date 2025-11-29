@@ -6,7 +6,7 @@ import {
     VerificationStatus,
     ValidationError,
 } from '@/types'
-import { Prisma } from '@/generated/prisma' // Import Prisma types
+import { Prisma } from '@prisma/client' // Import Prisma types
 
 /**
  * VERIFICATION SERVICE

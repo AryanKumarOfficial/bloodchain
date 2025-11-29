@@ -4,7 +4,7 @@ import {prisma} from '@/lib/prisma'
 import {Logger} from '@/lib/utils/logger'
 import {GeoUtil} from '@/lib/utils/geo-util'
 import * as tf from '@tensorflow/tfjs'
-import type {BloodRequest, Donation, DonorProfile, RequestMatch, User} from '@/generated/prisma'
+import type {BloodRequest, Donation, DonorProfile, RequestMatch, User} from '@prisma/client'
 
 interface MatchingFeatures {
     bloodTypeScore: number

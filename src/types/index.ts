@@ -1,4 +1,4 @@
-import {BloodType, UserRole} from "@/generated/prisma"
+import {BloodType, UserRole} from "@prisma/client"
 
 
 export enum RhFactor {

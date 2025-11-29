@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs'
 import {prisma} from '@/lib/prisma'
 import {Logger} from '@/lib/utils/logger'
 import {IAuthCredentials} from '@/types'
-import {User} from '@/generated/prisma' // Import the full User type
+import {User} from '@prisma/client' // Import the full User type
 
 const logger = new Logger('AuthValidator')
 

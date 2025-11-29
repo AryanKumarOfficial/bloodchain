@@ -10,7 +10,7 @@ import {
     VerificationStatus,
 } from '@/types'
 import {Validator} from '@/lib/utils/validators'
-import {$Enums, BloodRequest as PrismaBloodRequest, RequestMatch} from '@/generated/prisma'
+import {$Enums, BloodRequest as PrismaBloodRequest, RequestMatch} from '@prisma/client'
 import BloodType = $Enums.BloodType; // Import Prisma type
 import RequestStatus = $Enums.RequestStatus;
 

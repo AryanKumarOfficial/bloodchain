@@ -3,7 +3,7 @@ import {PrismaAdapter} from '@next-auth/prisma-adapter'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import GoogleProvider from 'next-auth/providers/google'
 import {prisma} from '@/lib/prisma'
-import {UserRole, VerificationStatus} from '@/generated/prisma'
+import {UserRole, VerificationStatus} from '@prisma/client'
 import {validateUserCredentials} from '@/lib/services/auth.service'
 import {Logger} from '@/lib/utils/logger'
 
