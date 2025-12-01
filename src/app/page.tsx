@@ -1,115 +1,98 @@
-// app/page.tsx
-
 'use client'
 
-import {useSession} from 'next-auth/react'
-import {useRouter} from 'next/navigation'
+import { motion } from 'framer-motion'
 import Link from 'next/link'
-import {JSX} from "react";
+import { ArrowRight, Heart, Shield, Zap } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
-export default function HomePage(): JSX.Element {
-    const {data: session, status} = useSession()
-    const router = useRouter()
+const fadeIn = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0 }
+}
 
-    if (status === 'loading') {
-        return (
-            <div className="flex items-center justify-center min-h-screen">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
-            </div>
-        )
-    }
-
-    if (session) {
-        router.push('/dashboard')
-    }
-
+export default function LandingPage() {
     return (
-        <div className="min-h-screen bg-gradient-to-b from-red-50 to-white">
+        <div className="min-h-screen bg-background overflow-hidden">
             {/* Hero Section */}
-            <section className="py-20 px-4 text-center">
-                <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-4">
-                    Welcome to BloodChain
-                </h1>
-                <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-                    Revolutionizing blood donation with AI-powered matching, blockchain verification,
-                    and zero hospital dependency
-                </p>
+            <section className="relative pt-32 pb-20 px-6">
+                <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-red-100 via-background to-background dark:from-red-950/30"></div>
 
-                <div className="flex gap-4 justify-center">
-                    <Link
-                        href="/signin"
-                        className="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-lg font-semibold transition"
+                <div className="max-w-5xl mx-auto text-center space-y-8">
+                    <motion.div
+                        initial="hidden"
+                        animate="visible"
+                        variants={fadeIn}
+                        transition={{ duration: 0.5 }}
                     >
-                        Sign In
-                    </Link>
-                    <Link
-                        href="/signup"
-                        className="border-2 border-red-600 text-red-600 hover:bg-red-50 px-8 py-3 rounded-lg font-semibold transition"
+            <span className="px-3 py-1 rounded-full bg-red-100 text-red-600 text-sm font-medium dark:bg-red-900/30 dark:text-red-400">
+              v1.0 Public Beta Live 🚀
+            </span>
+                        <h1 className="mt-6 text-6xl md:text-7xl font-extrabold tracking-tight text-foreground">
+                            Blood Donation, <br />
+                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-orange-600">
+                Decentralized.
+              </span>
+                        </h1>
+                        <p className="mt-6 text-xl text-muted-foreground max-w-2xl mx-auto">
+                            Connect directly with donors using AI matching and verify every drop on the blockchain.
+                            Zero intermediaries. 100% Trust.
+                        </p>
+                    </motion.div>
+
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.3 }}
+                        className="flex gap-4 justify-center"
                     >
-                        Sign Up
-                    </Link>
+                        <Link href="/signin">
+                            <Button size="lg" className="rounded-full px-8 text-lg bg-red-600 hover:bg-red-700 shadow-lg shadow-red-500/20">
+                                Start Saving Lives <ArrowRight className="ml-2 h-5 w-5" />
+                            </Button>
+                        </Link>
+                        <Link href="/about">
+                            <Button size="lg" variant="outline" className="rounded-full px-8 text-lg">
+                                How it Works
+                            </Button>
+                        </Link>
+                    </motion.div>
                 </div>
             </section>
 
-            {/* Features Section */}
-            <section className="py-20 px-4 bg-white">
-                <h2 className="text-4xl font-bold text-center mb-12">Key Features</h2>
-
-                <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-                    {/* Feature 1 */}
-                    <div className="p-6 border-2 border-red-200 rounded-lg hover:shadow-lg transition">
-                        <div className="text-4xl mb-4">🤖</div>
-                        <h3 className="text-2xl font-bold mb-2">AI Matching</h3>
-                        <p className="text-gray-600">
-                            Autonomous TensorFlow-powered matching algorithm that finds compatible donors
-                            instantly
-                        </p>
-                    </div>
-
-                    {/* Feature 2 */}
-                    <div className="p-6 border-2 border-red-200 rounded-lg hover:shadow-lg transition">
-                        <div className="text-4xl mb-4">⛓️</div>
-                        <h3 className="text-2xl font-bold mb-2">Blockchain Verified</h3>
-                        <p className="text-gray-600">
-                            Multi-signature smart contracts ensure immutable, transparent, and trustless
-                            verification
-                        </p>
-                    </div>
-
-                    {/* Feature 3 */}
-                    <div className="p-6 border-2 border-red-200 rounded-lg hover:shadow-lg transition">
-                        <div className="text-4xl mb-4">👥</div>
-                        <h3 className="text-2xl font-bold mb-2">P2P Network</h3>
-                        <p className="text-gray-600">
-                            Direct donor-to-recipient connections with community verification, no hospital
-                            needed
-                        </p>
-                    </div>
-                </div>
-            </section>
-
-            {/* How It Works */}
-            <section className="py-20 px-4">
-                <h2 className="text-4xl font-bold text-center mb-12">How It Works</h2>
-
-                <div className="max-w-4xl mx-auto">
+            {/* Features Grid */}
+            <section className="py-20 px-6 max-w-7xl mx-auto">
+                <div className="grid md:grid-cols-3 gap-8">
                     {[
-                        {num: 1, title: 'Register', desc: 'Create account as donor or recipient'},
-                        {num: 2, title: 'Biometric Verify', desc: 'AI-powered facial recognition verification'},
-                        {num: 3, title: 'AI Match', desc: 'Autonomous matching with qualified donors'},
-                        {num: 4, title: 'Blockchain Confirm', desc: 'Multi-signature blockchain verification'},
-                        {num: 5, title: 'Complete', desc: 'Receive blood with instant reward issuance'},
-                    ].map((step) => (
-                        <div key={step.num} className="flex items-center mb-8">
-                            <div
-                                className="bg-red-600 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold text-lg">
-                                {step.num}
+                        {
+                            icon: <Zap className="h-8 w-8 text-yellow-500" />,
+                            title: "AI Matching",
+                            desc: "Our TensorFlow model predicts the best donor matches based on location, blood type, and reliability score."
+                        },
+                        {
+                            icon: <Shield className="h-8 w-8 text-blue-500" />,
+                            title: "Blockchain Verified",
+                            desc: "Every donation is recorded as a smart contract transaction on Polygon, ensuring immutable history."
+                        },
+                        {
+                            icon: <Heart className="h-8 w-8 text-red-500" />,
+                            title: "Token Rewards",
+                            desc: "Earn reputation tokens and soulbound NFTs for every verified donation. Build your legacy."
+                        }
+                    ].map((feature, i) => (
+                        <motion.div
+                            key={i}
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: i * 0.2 }}
+                            className="p-8 rounded-3xl border bg-card/50 backdrop-blur-sm hover:border-red-500/50 transition-colors"
+                        >
+                            <div className="mb-4 p-3 bg-background rounded-2xl w-fit border shadow-sm">
+                                {feature.icon}
                             </div>
-                            <div className="ml-4 flex-1">
-                                <h3 className="text-xl font-bold">{step.title}</h3>
-                                <p className="text-gray-600">{step.desc}</p>
-                            </div>
-                        </div>
+                            <h3 className="text-xl font-bold mb-2">{feature.title}</h3>
+                            <p className="text-muted-foreground">{feature.desc}</p>
+                        </motion.div>
                     ))}
                 </div>
             </section>
