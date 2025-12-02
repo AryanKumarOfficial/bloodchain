@@ -1,11 +1,11 @@
-import {NextRequest, NextResponse} from 'next/server'
-import {prisma} from '@/lib/prisma'
-import {Logger} from '@/lib/utils/logger' // Assuming logger is in utils
-import {userRegistrationSchema} from '@/lib/utils/validators' // Assuming validators is in utils
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { Logger } from '@/lib/utils/logger' // Assuming logger is in utils
+import { userRegistrationSchema } from '@/lib/utils/validators' // Assuming validators is in utils
 import bcrypt from 'bcryptjs' // Use bcryptjs as seen in package.json
-import {z} from 'zod'
-import type {Notification} from "@/lib/services/notification.service"
-import {notificationService} from '@/lib/services/notification.service'
+import { z } from 'zod'
+import type { Notification } from "@/lib/services/notification.service"
+import { notificationService } from '@/lib/services/notification.service'
 
 const logger = new Logger('AuthRegisterAPI')
 
@@ -16,13 +16,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
         // Check if user exists
         const existingUser = await prisma.user.findUnique({
-            where: {email: validated.email},
+            where: { email: validated.email },
         })
 
         if (existingUser) {
             return NextResponse.json(
-                {error: 'Email already registered'},
-                {status: 409}
+                {
+                    error: 'Email already registered',
+                    success: false
+
+                },
+                { status: 409 }
             )
         }
 
@@ -47,7 +51,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             },
         })
 
-        logger.info('✅ User registered', {userId: user.id, email: user.email})
+        logger.info('✅ User registered', { userId: user.id, email: user.email })
 
         // TODO: Send verification email (using notificationService)
         const notification: Notification = {
@@ -62,21 +66,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             {
                 success: true,
                 userId: user.id,
-                message: 'Registration successful. Check email for verification.',
+                message: 'Registration successful. Please login!',
             },
-            {status: 201}
+            { status: 201 }
         )
     } catch (error) {
         if (error instanceof z.ZodError) {
             return NextResponse.json(
-                {error: 'Validation failed', details: error.cause},
-                {status: 400}
+                { error: 'Validation failed', details: error.cause, success: false },
+                { status: 400 }
             )
         }
         logger.error('Registration error:', error as Error)
         return NextResponse.json(
-            {error: 'Registration failed'},
-            {status: 500}
+            { error: 'Registration failed', success: false },
+            { status: 500 }
         )
     }
 }

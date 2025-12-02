@@ -1,6 +1,6 @@
-import {withAuth} from "next-auth/middleware"
-import type {NextRequest} from "next/server"
-import {NextResponse} from "next/server"
+import { withAuth } from "next-auth/middleware"
+import type { NextRequest } from "next/server"
+import { NextResponse } from "next/server"
 
 const PUBLIC_PATHS = [
     "/_next/",
@@ -40,8 +40,8 @@ function requiresVerification(pathname: string): boolean {
 function respondUnauthorized(request: NextRequest) {
     if (request.nextUrl.pathname.startsWith("/api/")) {
         return NextResponse.json(
-            {error: "Unauthorized", message: "Authentication required"},
-            {status: 401}
+            { error: "Unauthorized", message: "Authentication required" },
+            { status: 401 }
         )
     }
     const url = new URL("/signin", request.url)
@@ -52,8 +52,8 @@ function respondUnauthorized(request: NextRequest) {
 function respondForbidden(request: NextRequest, message: string = "Access denied") {
     if (request.nextUrl.pathname.startsWith("/api/")) {
         return NextResponse.json(
-            {error: "Forbidden", message},
-            {status: 403}
+            { error: "Forbidden", message },
+            { status: 403 }
         )
     }
     const url = new URL("/forbidden", request.url)
@@ -71,7 +71,7 @@ export default withAuth(
         }
 
 
-        if (pathname === "/signin") {
+        if (pathname === "/signin" || pathname === "/signup") {
             if (token) {
                 return NextResponse.redirect(new URL("/dashboard", req.url))
             }
