@@ -1,5 +1,7 @@
 import {Server as HTTPServer} from 'http'
 import {Server as IOServer, Socket} from 'socket.io'
+import {createAdapter} from '@socket.io/redis-adapter' // Ensure this package is installed
+import {createClient} from 'redis'
 import {Logger} from '@/lib/utils/logger'
 import {bloodRequestService} from '@/lib/services/blood-request.service'
 import {aiService} from '@/lib/services/ai.service'
@@ -12,9 +14,6 @@ import {IEmergencyBroadcast, ILocationUpdate, UrgencyLevel,} from '@/types'
 
 const logger = new Logger('SocketServer')
 
-// ---
-// **FIX 1:** The `declare global` namespace must be 'socket.io'
-// ---
 declare module 'socket.io' {
     interface Socket {
         userId?: string
@@ -37,8 +36,27 @@ export class SocketIOServer {
             maxHttpBufferSize: 1e6,
         })
 
+        // PATCH: Initialize Redis Adapter for Production Scaling
+        this.initializeAdapter();
+
         this.setupMiddleware()
         this.setupConnections()
+    }
+
+    private async initializeAdapter() {
+        if (process.env.REDIS_URL) {
+            try {
+                const pubClient = createClient({url: process.env.REDIS_URL});
+                const subClient = pubClient.duplicate();
+
+                await Promise.all([pubClient.connect(), subClient.connect()]);
+
+                this.io.adapter(createAdapter(pubClient, subClient));
+                logger.info('✅ Socket.io Redis Adapter initialized');
+            } catch (error) {
+                logger.error('Failed to initialize Redis Adapter', error as Error);
+            }
+        }
     }
 
     /**
@@ -77,7 +95,7 @@ export class SocketIOServer {
             socket.on('register-donor', (data: { userId: string }) => {
                 this.connectedDonors.set(data.userId, socket.id)
                 socket.join(`donor-${data.userId}`)
-                socket.join('donors') // **CHANGED:** Add to global donors room
+                socket.join('donors')
                 logger.info('Donor registered', {userId: data.userId})
             })
 
@@ -85,13 +103,13 @@ export class SocketIOServer {
             socket.on('register-recipient', (data: { userId: string }) => {
                 this.connectedRecipients.set(data.userId, socket.id)
                 socket.join(`recipient-${data.userId}`)
-                socket.join('recipients') // **CHANGED:** Add to global recipients room
+                socket.join('recipients')
                 logger.info('Recipient registered', {userId: data.userId})
             })
 
             // Location tracking
             socket.on('location-update', async (data: ILocationUpdate) => {
-                if (!socket.userId) return; // Type guard
+                if (!socket.userId) return;
 
                 logger.debug('Location update received', {
                     userId: socket.userId,
@@ -99,12 +117,7 @@ export class SocketIOServer {
                     lon: data.longitude.toFixed(4),
                 })
 
-                // ---
-                // **FIX 2 (Used aiService):** // Don't broadcast all locations to all clients.
-                // Instead, update the AI service with the donor's new location.
-                // ---
                 try {
-                    // Assuming aiService has a method to update location
                     await aiService.updateDonorLocation(socket.userId, data.latitude, data.longitude);
                 } catch (error) {
                     logger.error('Failed to update donor location via AI service', error as Error);
@@ -116,7 +129,6 @@ export class SocketIOServer {
                 try {
                     logger.info('New blood request event', {userId: socket.userId})
 
-                    // Broadcast emergency alert
                     this.broadcastEmergencyAlert({
                         type: 'NEW_REQUEST',
                         urgency: data.urgency as UrgencyLevel,
@@ -126,7 +138,6 @@ export class SocketIOServer {
                         timestamp: new Date(),
                     })
 
-                    // Notify all connected donors
                     this.io.to('donors').emit('emergency-request-broadcast', {
                         requestId: data.requestId,
                         bloodType: data.bloodType,
@@ -146,7 +157,6 @@ export class SocketIOServer {
                 try {
                     logger.info('Donor matched event', {matchId: data.matchId})
 
-                    // Notify donor
                     this.io
                         .to(`donor-${data.donorId}`)
                         .emit('auto-matched-notification', {
@@ -158,7 +168,6 @@ export class SocketIOServer {
                             timestamp: new Date(),
                         })
 
-                    // Notify recipient
                     this.io
                         .to(`recipient-${data.recipientId}`)
                         .emit('donor-matched-notification', {
@@ -178,12 +187,10 @@ export class SocketIOServer {
                     logger.info('Donation completed event', {
                         donationId: data.donationId,
                     })
-                    // Notify recipient
                     this.io.to(`recipient-${data.recipientId}`).emit('donation-complete-status', {
                         donationId: data.donationId,
                         message: 'Your request is complete!'
                     });
-                    // Notify donor
                     this.io.to(`donor-${data.donorId}`).emit('donation-complete-status', {
                         donationId: data.donationId,
                         reward: data.rewardAmount,
@@ -196,25 +203,18 @@ export class SocketIOServer {
 
             // Accept donation request
             socket.on('accept-donation', async (data: any) => {
-                if (!socket.userId) return; // Type guard
+                if (!socket.userId) return;
                 try {
                     logger.info('Donation accepted', {matchId: data.matchId, userId: socket.userId})
 
-                    // ---
-                    // **FIX 3 (Used bloodRequestService):** // Confirm the match in the database and notify the recipient.
-                    // ---
-
-                    // 1. Update the database (assuming this method exists)
                     const match = await bloodRequestService.confirmDonationMatch(data.matchId, socket.userId);
 
-                    // 2. Notify the donor (themselves) that it was successful
                     socket.emit('donation-accepted-confirmed', {
                         matchId: data.matchId,
                         message: 'Donation request accepted. Recipient notified.',
                         timestamp: new Date(),
                     })
 
-                    // 3. Notify the recipient
                     if (match && match.request) {
                         this.io
                             .to(`recipient-${match.request.recipientId}`)
@@ -230,29 +230,20 @@ export class SocketIOServer {
                 }
             })
 
-            // Disconnect handler
             socket.on('disconnect', () => {
-                // ... (existing logic is good) ...
                 logger.info('Socket disconnected', {socketId: socket.id})
             })
 
-            // Error handler
             socket.on('error', (error: Error) => {
                 logger.error('Socket error', error)
             })
         })
     }
 
-    /**
-     * Broadcast emergency alert
-     */
     private broadcastEmergencyAlert(alert: IEmergencyBroadcast): void {
         this.io.emit('emergency-alert', alert)
     }
 
-    /**
-     * Send notification to specific user
-     */
     sendToUser(userId: string, event: string, data: any): void {
         const socketId = this.connectedDonors.get(userId) ||
             this.connectedRecipients.get(userId)
@@ -262,25 +253,14 @@ export class SocketIOServer {
         }
     }
 
-    /**
-     * Broadcast to all donors
-     */
     broadcastToDonors(event: string, data: any): void {
-        // **CHANGED:** Emit to the 'donors' room
         this.io.to('donors').emit(event, data)
     }
 
-    /**
-     * Broadcast to all recipients
-     */
     broadcastToRecipients(event: string, data: any): void {
-        // **CHANGED:** Emit to the 'recipients' room
         this.io.to('recipients').emit(event, data)
     }
 
-    /**
-     * Get connected users
-     */
     getConnectedStats(): Record<string, number> {
         return {
             totalConnections: this.io.engine.clientsCount,
