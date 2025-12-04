@@ -25,6 +25,8 @@ export function DashboardContent({ session }: DashboardContentProps) {
         },
     })
 
+    console.log(`statsData`, statsData)
+
     // 2. Fetch Active Requests
     const { data: activeRequestsData, isLoading: requestsLoading } = useActiveRequests()
 

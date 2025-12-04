@@ -1,40 +1,14 @@
-import { NextResponse } from "next/server"
-import prisma from "@/lib/prisma" // adjust if your prisma client is elsewhere
-import { RequestStatus, DonationStatus } from "@prisma/client"
+import {NextResponse} from "next/server"
+import {getDashboardStats} from "@/lib/actions/dashboard.actions";
 
 export async function GET() {
     try {
-        // Active = OPEN blood requests
-        const activeRequests = await prisma.bloodRequest.count({
-            where: { status: RequestStatus.OPEN },
-        })
 
-        // Matched donors = blood requests that are MATCHED
-        const matchedDonors = await prisma.bloodRequest.count({
-            where: { status: RequestStatus.MATCHED },
-        })
+        const data = await getDashboardStats()
 
-        // Completed donations
-        const completedDonations = await prisma.donation.count({
-            where: { status: DonationStatus.COMPLETED },
-        })
-
-        // Total rewards (sum of rewardTokensIssued across all donations)
-        const rewardsAgg = await prisma.donation.aggregate({
-            _sum: {
-                rewardTokensIssued: true,
-            },
-        })
-
-        const totalRewards = rewardsAgg._sum.rewardTokensIssued ?? 0
-
+        console.log("data", data)
         return NextResponse.json({
-            data: {
-                activeRequests,
-                matchedDonors,
-                completedDonations,
-                totalRewards,
-            },
+            data
         })
     } catch (error) {
         console.error("[GET /api/dashboard/stats] ERROR:", error)
@@ -49,7 +23,7 @@ export async function GET() {
                     totalRewards: 0,
                 },
             },
-            { status: 500 },
+            {status: 500},
         )
     }
 }

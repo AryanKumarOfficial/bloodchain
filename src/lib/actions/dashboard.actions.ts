@@ -1,12 +1,12 @@
 'use server'
 
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { DashboardStats } from '../types/dashboard'
-import { logToServer } from './log.action'
-import { LogLevel } from '@/types/logger'
-import { prisma } from '@/lib/prisma'
-import { RequestStatus, DonationStatus } from '@prisma/client'
+import {getServerSession} from 'next-auth'
+import {authOptions} from '@/lib/auth'
+import {DashboardStats} from '../types/dashboard'
+import {logToServer} from './log.action'
+import {LogLevel} from '@/types/logger'
+import {prisma} from '@/lib/prisma'
+import {RequestStatus, DonationStatus} from '@prisma/client'
 
 export const getDashboardStats = async (): Promise<DashboardStats> => {
     // 1. Validate session
@@ -14,22 +14,40 @@ export const getDashboardStats = async (): Promise<DashboardStats> => {
     if (!session?.user) {
         throw new Error('Unauthorized')
     }
+    if (!session?.user?.id) {
+        throw new Error('Malformed')
+    }
 
     try {
         // 2. Query Database Directly (No fetch)
         // Active = OPEN blood requests
         const activeRequests = await prisma.bloodRequest.count({
-            where: { status: RequestStatus.OPEN },
+            where: {
+                status: RequestStatus.OPEN,
+                recipient: {
+                    id: session?.user?.id,
+                }
+            },
         })
 
         // Matched donors = blood requests that are MATCHED
         const matchedDonors = await prisma.bloodRequest.count({
-            where: { status: RequestStatus.MATCHED },
+            where: {
+                status: RequestStatus.MATCHED,
+                recipient: {
+                    id: session?.user?.id,
+                }
+            },
         })
 
         // Completed donations
         const completedDonations = await prisma.donation.count({
-            where: { status: DonationStatus.COMPLETED },
+            where: {
+                status: DonationStatus.COMPLETED,
+                donor: {
+                    id: session?.user?.id,
+                }
+            },
         })
 
         // Total rewards
