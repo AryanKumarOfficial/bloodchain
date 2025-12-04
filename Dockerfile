@@ -41,5 +41,10 @@ COPY --from=builder /app/ml-models ./ml-models
 # Expose port
 EXPOSE 3000
 
+COPY --from=builder /app/scripts/entrypoint.sh ./scripts/entrypoint.sh
+RUN chmod +x ./scripts/entrypoint.sh
+
+CMD ["./scripts/entrypoint.sh"]
+
 # Start application
 CMD ["npm", "start"]
