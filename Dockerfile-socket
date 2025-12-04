@@ -1,37 +1,40 @@
-# --- Stage 1: Build ---
-FROM node:18-alpine AS builder
+# Dockerfile-socket
+
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install dependencies
-COPY package*.json ./
-COPY pnpm-lock.yaml ./
-RUN npm install -g pnpm && pnpm install
+# PATCH: Install libc6-compat
+RUN apk add --no-cache openssl libc6-compat
+RUN npm install -g pnpm
 
-# Copy all source code
+COPY package.json pnpm-lock.yaml ./
+
+# PATCH: Ensure dependencies are installed for Linux
+RUN pnpm install --frozen-lockfile
+RUN pnpm add -D @prisma/engines
+
 COPY . .
 
-# Build the Next.js app (needed for Prisma client)
-RUN npm run build:next
-# Build the socket server
-RUN npm run build:socket
+RUN npx prisma generate
+RUN pnpm run build:socket
 
-# --- Stage 2: Production ---
-FROM node:18-alpine
+# --- Production Stage ---
+FROM node:20-alpine
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Copy built socket server, prisma client, and node_modules
+# PATCH: Install libc6-compat
+RUN apk add --no-cache openssl libc6-compat
+RUN npm install -g pnpm
+
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/src/generated ./src/generated
 COPY --from=builder /app/prisma ./prisma
 
-# Expose port
 EXPOSE 3001
 
-# Start socket server
-CMD ["npm", "run", "socket"]
+CMD ["pnpm", "run", "socket"]

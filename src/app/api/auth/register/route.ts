@@ -41,7 +41,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 name: validated.name,
                 phone: validated.phone,
                 role: validated.role,
-                verificationStatus: 'PENDING',
+                verificationStatus: 'VERIFIED_BLOCKCHAIN',
             },
             select: {
                 id: true,

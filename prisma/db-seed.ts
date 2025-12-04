@@ -1,145 +1,308 @@
 // src/lib/db-seed.ts
 
-import {VerificationStatus} from '@prisma/client'
-import {UserRole} from '@prisma/client'
+import {
+    PrismaClient,
+    UserRole,
+    VerificationStatus,
+    BloodType,
+    RequestStatus,
+    MatchStatus,
+    DonationStatus,
+    User,
+    DonorProfile
+} from '@prisma/client'
 import {prisma} from '@/lib/prisma'
 import {Logger} from '@/lib/utils/logger'
 import bcrypt from "bcryptjs";
 
 const logger = new Logger('DatabaseSeed')
 
+// Helper for consistent geo-locations (Simulating New Delhi area)
+const BASE_LAT = 28.6139;
+const BASE_LNG = 77.2090;
+
 export async function seedDatabase() {
     try {
-        logger.info('🌱 Seeding database...')
+        logger.info('🌱 Starting comprehensive database seed...')
 
-        // CLEANUP: delete dependent records first to avoid foreign key constraint errors
-        // Delete donorProfile before user because donorProfile likely has a FK to user
-        await prisma.donorProfile.deleteMany()
-        await prisma.user.deleteMany()
+        // 1. CLEANUP (Order matters for Foreign Keys)
+        logger.info('🧹 Cleaning existing data...')
+        // Delete child tables first
+        await prisma.review.deleteMany();
+        await prisma.verification.deleteMany();
+        await prisma.donation.deleteMany();
+        await prisma.requestMatch.deleteMany();
+        await prisma.bloodRequest.deleteMany();
 
-        logger.info('🧹 Cleaned existing users and donor profiles')
+        // Delete profile tables
+        await prisma.recipientProfile.deleteMany();
+        await prisma.donorProfile.deleteMany();
 
-        // More sample donors
-        const donors = [
-            {
-                email: 'donor1@test.com',
-                passwordHash: 'hashed_password_1',
-                name: 'Test Donor 1',
-                phone: '+911234567890',
-                role: 'DONOR',
+        // Delete users last
+        await prisma.user.deleteMany();
+
+        const hashedPassword = await bcrypt.hash('password123', 10);
+
+        // ==========================================
+        // 2. CREATE SPECIAL ACTORS (Verifier, Recipient, Ambassador)
+        // ==========================================
+
+        // A. The Recipient (Needs blood)
+        const recipientUser = await prisma.user.create({
+            data: {
+                email: 'recipient@demo.com',
+                passwordHash: hashedPassword,
+                name: 'Alice Recipient',
+                phone: '+919999999999',
+                role: 'RECIPIENT',
+                verificationStatus: 'VERIFIED_PEER',
+            }
+        });
+
+        await prisma.recipientProfile.create({
+            data: {
+                userId: recipientUser.id,
+                city: 'New Delhi',
+                state: 'Delhi',
+                // bloodType does not exist on RecipientProfile in schema, using preferredDonorTypes
+                preferredDonorTypes: ['A_POSITIVE', 'O_POSITIVE'],
+                latitude: BASE_LAT,
+                longitude: BASE_LNG,
+                medicalHistory: 'Chronic Anemia',
+            }
+        });
+        logger.info('👤 Created Recipient: Alice');
+
+        // B. The Verifier (Doctor/Hospital)
+        const verifierUser = await prisma.user.create({
+            data: {
+                email: 'doctor@hospital.com',
+                passwordHash: hashedPassword,
+                name: 'Dr. Verifier',
+                phone: '+918888888888',
+                role: 'VERIFIER',
+                verificationStatus: 'VERIFIED_BLOCKCHAIN', // Trusted
+                walletAddress: '0x1234567890abcdef1234567890abcdef12345678', // Mock ETH address
+            }
+        });
+        logger.info('👨‍⚕️ Created Verifier: Dr. Verifier');
+
+        // C. The Ambassador (Community Leader)
+        await prisma.user.create({
+            data: {
+                email: 'leader@community.com',
+                passwordHash: hashedPassword,
+                name: 'Community Leader',
+                role: 'AMBASSADOR',
                 verificationStatus: 'VERIFIED_BLOCKCHAIN',
-                donorProfile: {
+                totalReputationScore: 5000,
+            }
+        });
+        logger.info('🏅 Created Ambassador');
+
+        // ==========================================
+        // 3. CREATE DONORS (The Crowd)
+        // ==========================================
+        const donorsData = [
+            {
+                email: 'donor.o.pos@test.com',
+                name: 'Rahul (O+)',
+                role: 'DONOR',
+                profile: {
                     bloodType: 'O_POSITIVE',
                     rhFactor: 'POSITIVE',
-                    isAvailable: true,
-                    aiReputationScore: 0.92,
-                    totalSuccessfulDonations: 12,
-                    reputationScore: 920,
-                },
+                    isAvailable: true, // Ready to donate
+                    aiReputationScore: 0.95,
+                    latitude: BASE_LAT + 0.01, // ~1km away
+                    longitude: BASE_LNG + 0.01,
+                }
             },
             {
-                email: 'donor2@test.com',
-                passwordHash: 'hashed_password_2',
-                name: 'Test Donor 2',
-                phone: '+919876543210',
+                email: 'donor.a.neg@test.com',
+                name: 'Priya (A-)',
                 role: 'DONOR',
-                verificationStatus: 'VERIFIED_BLOCKCHAIN',
-                donorProfile: {
+                profile: {
                     bloodType: 'A_NEGATIVE',
-                    rhFactor: 'NEGATIVE',
-                    isAvailable: false,
-                    aiReputationScore: 0.76,
-                    totalSuccessfulDonations: 5,
-                    reputationScore: 760,
-                },
-            },
-            {
-                email: 'donor3@test.com',
-                passwordHash: 'hashed_password_3',
-                name: 'Test Donor 3',
-                phone: '+919112223334',
-                role: 'DONOR',
-                verificationStatus: 'PENDING',
-                donorProfile: {
-                    bloodType: 'B_POSITIVE',
-                    rhFactor: 'POSITIVE',
-                    isAvailable: true,
-                    aiReputationScore: 0.66,
-                    totalSuccessfulDonations: 2,
-                    reputationScore: 660,
-                },
-            },
-            {
-                email: 'donor4@test.com',
-                passwordHash: 'hashed_password_4',
-                name: 'Test Donor 4',
-                phone: '+919998887776',
-                role: 'DONOR',
-                verificationStatus: 'VERIFIED_BLOCKCHAIN',
-                donorProfile: {
-                    bloodType: 'AB_NEGATIVE',
                     rhFactor: 'NEGATIVE',
                     isAvailable: true,
                     aiReputationScore: 0.88,
-                    totalSuccessfulDonations: 20,
-                    reputationScore: 880,
-                },
+                    latitude: BASE_LAT - 0.02, // ~2km away
+                    longitude: BASE_LNG - 0.01,
+                }
             },
             {
-                email: 'donor5@test.com',
-                passwordHash: 'hashed_password_5',
-                name: 'Test Donor 5',
-                phone: '+919070605040',
+                email: 'donor.b.pos@test.com',
+                name: 'Vikram (B+)',
                 role: 'DONOR',
-                verificationStatus: 'VERIFIED_BLOCKCHAIN',
-                donorProfile: {
-                    bloodType: 'O_NEGATIVE',
-                    rhFactor: 'NEGATIVE',
-                    isAvailable: false,
-                    aiReputationScore: 0.55,
-                    totalSuccessfulDonations: 0,
-                    reputationScore: 550,
-                },
-            },
-        ]
+                profile: {
+                    bloodType: 'B_POSITIVE',
+                    rhFactor: 'POSITIVE',
+                    isAvailable: false, // Currently busy
+                    aiReputationScore: 0.60,
+                    latitude: BASE_LAT + 0.05,
+                    longitude: BASE_LNG,
+                }
+            }
+        ];
 
-        for (const d of donors) {
-            const createdUser = await prisma.user.create({
+        // Explicitly type the array to avoid "never" type inference errors
+        const createdDonors: { user: User; profile: DonorProfile }[] = [];
+
+        for (const d of donorsData) {
+            const user = await prisma.user.create({
                 data: {
                     email: d.email,
-                    passwordHash: await bcrypt.hash(d.passwordHash, 10),
+                    passwordHash: hashedPassword,
                     name: d.name,
-                    phone: d.phone,
                     role: d.role as UserRole,
-                    verificationStatus: d.verificationStatus as VerificationStatus,
-                },
-            })
+                    verificationStatus: 'VERIFIED_BLOCKCHAIN',
+                }
+            });
 
-            await prisma.donorProfile.create({
+            const profile = await prisma.donorProfile.create({
                 data: {
-                    userId: createdUser.id,
-                    bloodType: d.donorProfile.bloodType as any,
-                    rhFactor: d.donorProfile.rhFactor as any,
-                    isAvailable: d.donorProfile.isAvailable,
-                    aiReputationScore: d.donorProfile.aiReputationScore,
-                    totalSuccessfulDonations: d.donorProfile.totalSuccessfulDonations,
-                    reputationScore: d.donorProfile.reputationScore,
-                },
-            })
+                    userId: user.id,
+                    bloodType: d.profile.bloodType as BloodType,
+                    rhFactor: d.profile.rhFactor,
+                    isAvailable: d.profile.isAvailable,
+                    aiReputationScore: d.profile.aiReputationScore,
+                    latitude: d.profile.latitude,
+                    longitude: d.profile.longitude,
+                    totalSuccessfulDonations: Math.floor(Math.random() * 10),
+                }
+            });
 
-            logger.info(`➕ Created donor ${createdUser.email}`)
+            createdDonors.push({user, profile});
+            logger.info(`🩸 Created Donor: ${d.name}`);
         }
 
-        logger.info('✅ Database seeding completed')
+        // ==========================================
+        // 4. CREATE SCENARIOS (Requests & Matches)
+        // ==========================================
+
+        // Scenario 1: ACTIVE EMERGENCY (Unmatched)
+        // ----------------------------------------
+        await prisma.bloodRequest.create({
+            data: {
+                recipientId: recipientUser.id,
+                bloodType: 'O_POSITIVE', // Matches Rahul
+                rhFactor: 'POSITIVE',
+                unitsNeeded: 2,
+                urgencyLevel: 'EMERGENCY', // High priority (String literal)
+                status: 'OPEN',
+                latitude: BASE_LAT,
+                longitude: BASE_LNG,
+                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
+                // description: Removed (Not in schema)
+            }
+        });
+        logger.info('🚨 Created Scenario 1: Active Emergency Request (O+)');
+
+        // Scenario 2: MATCHED BUT PENDING (Awaiting Donation)
+        // ----------------------------------------
+        const matchedRequest = await prisma.bloodRequest.create({
+            data: {
+                recipientId: recipientUser.id,
+                bloodType: 'A_NEGATIVE', // Matches Priya
+                rhFactor: 'NEGATIVE',
+                unitsNeeded: 1,
+                urgencyLevel: 'HIGH',
+                status: 'MATCHED',
+                latitude: BASE_LAT,
+                longitude: BASE_LNG,
+                expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+            }
+        });
+
+        // Find Priya (A-)
+        const priya = createdDonors.find(d => d.profile.bloodType === 'A_NEGATIVE');
+        if (priya) {
+            await prisma.requestMatch.create({
+                data: {
+                    requestId: matchedRequest.id,
+                    donorId: priya.user.id,
+                    status: 'ACCEPTED',
+                    overallAIScore: 0.98, // Renamed from aiMatchScore
+                    overallScore: 0.98,
+                    distanceScore: 0.95, // Schema uses score, not raw distanceKm
+                    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // Added required field
+                }
+            });
+        }
+        logger.info('🤝 Created Scenario 2: Matched Request (A-)');
+
+        // Scenario 3: COMPLETED HISTORY (Donation Done & Verified)
+        // ----------------------------------------
+        const completedRequest = await prisma.bloodRequest.create({
+            data: {
+                recipientId: recipientUser.id,
+                bloodType: 'O_POSITIVE',
+                rhFactor: 'POSITIVE',
+                unitsNeeded: 1,
+                urgencyLevel: 'MEDIUM',
+                status: 'FULFILLED',
+                latitude: BASE_LAT,
+                longitude: BASE_LNG,
+                expiresAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Past
+            }
+        });
+
+        // Use Rahul (O+) for this past donation
+        const rahul = createdDonors.find(d => d.profile.bloodType === 'O_POSITIVE');
+        if (rahul) {
+            const match = await prisma.requestMatch.create({
+                data: {
+                    requestId: completedRequest.id,
+                    donorId: rahul.user.id,
+                    status: 'COMPLETED',
+                    overallAIScore: 0.92,
+                    distanceScore: 0.9,
+                    expiresAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000), // Past
+                }
+            });
+
+            // Create the Donation Record
+            const donation = await prisma.donation.create({
+                data: {
+                    matchId: match.id,
+                    donorId: rahul.user.id,
+                    requestId: completedRequest.id,
+                    status: 'COMPLETED',
+                    unitsCollected: 1,
+                    bloodType: 'O_POSITIVE',
+                    rhFactor: 'POSITIVE',
+                    completedAt: new Date(),
+                    transactionHash: '0xabc...123', // Renamed from blockchainTxHash
+                    blockchainVerified: true,
+                }
+            });
+
+            // Create Verification by Dr. Verifier
+            await prisma.verification.create({
+                data: {
+                    // Verification uses requestId relation, not donationId directly in schema provided,
+                    // or maybe it does? Let's check schema.
+                    // Schema says: requestId String?, request BloodRequest?
+                    // It does NOT have donationId. It verifies the Request or User.
+                    // If you want to link to donation, usually you verify the user action.
+                    // For this seed, we link to the request.
+                    requestId: completedRequest.id,
+                    verifierId: verifierUser.id,
+                    status: 'VERIFIED_BLOCKCHAIN', // Renamed from APPROVED
+                    verificationType: 'DOCUMENT', // Renamed from verificationMethod
+                    // notes: Removed (Not in schema)
+                }
+            });
+        }
+        logger.info('✅ Created Scenario 3: Completed & Verified Donation History');
+
+        logger.info('🚀 Database seeding completed successfully!');
+
     } catch (error) {
-        logger.error('Database seeding failed:', error as Error)
+        logger.error('Database seeding failed:', error as Error);
+        process.exit(1);
     } finally {
-        // Make sure the process isn't left hanging in case this is run standalone
-        try {
-            await prisma.$disconnect()
-        } catch (e) {
-            // ignore
-        }
+        await prisma.$disconnect();
     }
 }
 

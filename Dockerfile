@@ -1,50 +1,54 @@
 # Dockerfile
 
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install dependencies
-COPY package*.json ./
-# PATCH: Install OpenSSL for Prisma if needed
-RUN apk add --no-cache openssl
-RUN npm ci
+# PATCH: Install libc6-compat (Critical for Prisma on Alpine)
+RUN apk add --no-cache openssl libc6-compat
+
+# Install pnpm
+RUN npm install -g pnpm
+
+# Copy dependency files first
+COPY package.json pnpm-lock.yaml ./
+
+# PATCH: Install dependencies ignoring scripts first, then force install prisma engines
+# This ensures the Linux binaries are downloaded regardless of the Windows lockfile
+RUN pnpm install --frozen-lockfile
+# Explicitly add the linux engine if missing (fallback safety)
+RUN pnpm add -D @prisma/engines
 
 # Copy source code
 COPY . .
 
-# PATCH: Generate Prisma Client BEFORE build
+# Generate Prisma Client
 RUN npx prisma generate
 
 # Build Next.js
-RUN npm run build
+RUN pnpm run build
 
-# Production stage
-FROM node:18-alpine
+# --- Production Stage ---
+FROM node:20-alpine
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Install OpenSSL in production image as well
-RUN apk add --no-cache openssl
+# PATCH: Install libc6-compat in production too
+RUN apk add --no-cache openssl libc6-compat
+RUN npm install -g pnpm
 
-# Copy built application
+# Copy built artifacts
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/package.json ./
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
-# Copy trained models if they exist, or create dir
 COPY --from=builder /app/ml-models ./ml-models
+COPY --from=builder /app/scripts ./scripts
 
-# Expose port
 EXPOSE 3000
 
-COPY --from=builder /app/scripts/entrypoint.sh ./scripts/entrypoint.sh
 RUN chmod +x ./scripts/entrypoint.sh
-
 CMD ["./scripts/entrypoint.sh"]
-
-# Start application
-CMD ["npm", "start"]

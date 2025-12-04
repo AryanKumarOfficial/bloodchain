@@ -20,24 +20,6 @@ services:
       - bloodchain-network
     restart: always
 
-  # PostgreSQL
-  postgresql:
-    image: postgis/postgis:15-3.3
-    container_name: bloodchain-db
-    environment:
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
-      POSTGRES_DB: ${DB_NAME:-bloodchain}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - bloodchain-network
-    restart: always
 
   # Redis Cache
   redis:
@@ -72,8 +54,7 @@ services:
       # Real Blockchain RPC for production
       - ETHEREUM_RPC_URL=${ETHEREUM_RPC_URL}
     depends_on:
-      postgresql:
-        condition: service_healthy
+
       redis:
         condition: service_healthy
     volumes:
@@ -95,7 +76,6 @@ services:
       - REDIS_URL=redis://redis:6379
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
     depends_on:
-      - postgresql
       - redis
       - app
     networks:
@@ -107,6 +87,5 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:
   redis_data:
   ml_models_data:
