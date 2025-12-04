@@ -22,7 +22,7 @@ const Popup = dynamic(
     {ssr: false}
 )
 
-interface Location {
+export interface Location {
     lat: number
     lng: number
     title: string

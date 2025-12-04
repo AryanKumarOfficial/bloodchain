@@ -8,6 +8,7 @@ import { useActiveRequests } from '@/hooks/useBloodRequests'
 import { useQuery } from '@tanstack/react-query'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Inbox, Activity } from 'lucide-react' // Added icons for better UI
+import { Location } from '@/components/maps/BloodMap'
 
 export default function DashboardPage() {
     const { data: session, status } = useSession()
@@ -56,7 +57,7 @@ export default function DashboardPage() {
 
     // Prepare map data
     const requests = activeRequestsData?.data?.requests || []
-    const mapLocations = requests.map((req: any) => ({
+    const mapLocations: Location[] = requests.map((req: any) => ({
         lat: req.latitude || 0,
         lng: req.longitude || 0,
         title: `${req.unitsNeeded} units of ${req.bloodType}`,
@@ -83,8 +84,8 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex items-center gap-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
                         <span className="relative flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                         </span>
                         System Operational
                     </div>
