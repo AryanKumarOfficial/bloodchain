@@ -1,7 +1,8 @@
-// src/services/reward.service.ts
+// src/lib/services/reward.service.ts
 
 import {Logger} from '@/lib/utils/logger'
 import {prisma} from '@/lib/prisma'
+import {blockchainService} from '@/lib/services/blockchain.service'
 
 interface RewardEvent {
     userId: string
@@ -20,10 +21,6 @@ interface NFTMetadata {
 const logger = new Logger('RewardService')
 
 export class RewardService {
-    private readonly DONATION_REWARD = 100 // tokens per unit
-    private readonly VERIFICATION_REWARD = 25
-    private readonly REFERRAL_REWARD = 50
-
     /**
      * Issue tokens for completed donation
      */
@@ -31,13 +28,14 @@ export class RewardService {
         try {
             const donor = await prisma.donorProfile.findUnique({
                 where: {userId: event.userId},
+                include: { user: true } // PATCH: Include user to get wallet address
             })
 
             if (!donor) {
                 throw new Error('Donor not found')
             }
 
-            // Update reward balance
+            // Update reward balance in DB
             const newTotal = donor.totalRewardsEarned + event.amount
 
             await prisma.donorProfile.update({
@@ -47,15 +45,29 @@ export class RewardService {
                 },
             })
 
-            logger.info('💰 Tokens issued', {
+            logger.info('💰 Tokens recorded in DB', {
                 userId: event.userId,
                 amount: event.amount,
                 total: newTotal,
-                reason: event.description,
             })
 
-            // In production: Call blockchain to mint ERC20 tokens
-            // await blockchainService.mintTokens(donor.user.walletAddress, event.amount)
+            // PATCH: Execute Real Blockchain Transaction
+            if (donor.user.walletAddress) {
+                try {
+                    // Send tokens from platform treasury to donor
+                    const txHash = await blockchainService.transferTokens(
+                        donor.user.walletAddress,
+                        event.amount
+                    );
+                    logger.info('⛓️ Blockchain tokens transferred', { txHash });
+                } catch (bcError) {
+                    // Don't crash the request if blockchain fails, but log critical error
+                    logger.error('Blockchain transfer failed (Retry needed):', bcError as Error);
+                }
+            } else {
+                logger.warn('Skipping blockchain transfer: Donor has no wallet address');
+            }
+
         } catch (error) {
             logger.error('Failed to issue token reward: ' + (error as Error).message)
             throw error
@@ -72,6 +84,7 @@ export class RewardService {
         try {
             const donor = await prisma.donorProfile.findUnique({
                 where: {userId},
+                include: { user: true }
             })
 
             if (!donor) {
@@ -81,10 +94,12 @@ export class RewardService {
             // Create NFT metadata
             const metadata = this.generateNFTMetadata(badgeType, donor)
 
-            // In production: Call blockchain to mint NFT
+            // PATCH: Real Blockchain Interaction placeholder
+            // Note: Since mintNFT logic requires a specific contract method not in the service yet,
+            // we will simulate the ID generation but keep the structure ready for the call.
             // const tokenId = await blockchainService.mintNFT(donor.user.walletAddress, metadata)
 
-            const tokenId = `${badgeType}-${Date.now()}-${Math.random()}`
+            const tokenId = `${badgeType}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
             // Update donor profile
             const updatedNFTs = [...donor.nftBadgesIssued, tokenId]
@@ -97,7 +112,7 @@ export class RewardService {
                 },
             })
 
-            logger.info('🎁 NFT badge minted', {
+            logger.info('🎁 NFT badge minted (DB)', {
                 userId,
                 badgeType,
                 tokenId,
@@ -120,8 +135,8 @@ export class RewardService {
         const metadata: Record<string, NFTMetadata> = {
             GOLD_DONOR: {
                 name: 'Gold Donor Badge',
-                description: 'Awarded to donors who have completed 50+ successful donations',
-                image: 'ipfs://QmGold...', // IPFS hash
+                description: 'Awarded to donors who have completed 10+ successful donations',
+                image: 'ipfs://QmGold...',
                 attributes: {
                     rarity: 'RARE',
                     achievement: 'Gold',
@@ -130,7 +145,7 @@ export class RewardService {
             },
             VERIFIED: {
                 name: 'Verified Badge',
-                description: 'Awarded to donors who passed biometric and identity verification',
+                description: 'Awarded to donors who passed biometric verification',
                 image: 'ipfs://QmVerified...',
                 attributes: {
                     rarity: 'COMMON',
@@ -140,7 +155,7 @@ export class RewardService {
             },
             AMBASSADOR: {
                 name: 'Community Ambassador Badge',
-                description: 'Awarded to community leaders and verifiers',
+                description: 'Awarded to community leaders',
                 image: 'ipfs://QmAmbassador...',
                 attributes: {
                     rarity: 'EPIC',
