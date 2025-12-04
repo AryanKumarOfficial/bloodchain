@@ -4,23 +4,27 @@ import React from "react";
 import Link from 'next/link'
 import {usePathname} from 'next/navigation'
 import {cn} from '@/lib/utils'
-// Define your navigation links here
-const routes = [
-    {href: '/dashboard', label: 'Dashboard'},
-    {href: '/donors', label: 'Find Donors'},
-    {href: '/requests', label: 'Blood Requests'},
-]
-
-interface MainNavProps extends React.HTMLAttributes<HTMLElement> {
-    onClick?: () => void
-}
+import { useSession } from 'next-auth/react'
 
 export function MainNav({
                             className,
                             onClick,
                             ...props
-                        }: MainNavProps) {
+                        }: React.HTMLAttributes<HTMLElement> & { onClick?: () => void }) {
     const pathname = usePathname()
+    const { data: session } = useSession()
+
+    const routes = [
+        {href: '/dashboard', label: 'Dashboard'},
+        {href: '/requests/new', label: 'Request Blood'},
+        {href: '/donations/history', label: 'History'},
+        {href: '/rewards', label: 'Rewards'},
+    ]
+
+    // Add Verifier route conditionally
+    if (session?.user?.role === 'VERIFIER') {
+        routes.push({ href: '/verifier/dashboard', label: 'Verifier Console' })
+    }
 
     return (
         <nav
@@ -34,7 +38,7 @@ export function MainNav({
                     className={cn(
                         'text-sm font-medium transition-colors hover:text-primary',
                         pathname === route.href
-                            ? 'text-black dark:text-white'
+                            ? 'text-black dark:text-white font-bold'
                             : 'text-muted-foreground'
                     )}
                     onClick={onClick}
