@@ -2,6 +2,7 @@ import * as tf from '@tensorflow/tfjs'
 import {prisma} from '@/lib/prisma'
 import {Logger} from '@/lib/utils/logger'
 import {IAIFeatureVector, IAIMatchingScore, IBloodRequest, IDonorProfile,} from '@/types'
+import path from 'path' // Added import
 
 /**
  * AI MATCHING SERVICE
@@ -11,30 +12,30 @@ import {IAIFeatureVector, IAIMatchingScore, IBloodRequest, IDonorProfile,} from 
 export class AIService {
     private logger: Logger = new Logger('AIService')
     private model: tf.LayersModel | null = null
-    // ---
-    // **NEW:** A cache to store live donor locations
-    // ---
+    // Cache to store live donor locations
     private donorLocations: Map<string, { lat: number, lon: number }> = new Map();
 
     /**
      * Initialize AI model
      */
     async initializeModel(): Promise<void> {
-        // ... (existing initializeModel logic)
         try {
             if (this.model) return
 
             this.logger.info('Initializing AI model...')
 
+            // PATCH: Load from file system instead of IndexedDB for Server Environment
+            const modelPath = path.join(process.cwd(), 'ml-models/trained/model.json');
+            // Check if model exists effectively or handle load error
             try {
-                this.model = await tf.loadLayersModel(
-                    'indexeddb://hemobridge-matching-model'
-                )
-                this.logger.info('Model loaded from IndexedDB')
-            } catch {
-                this.logger.info('Building new AI model...')
+                // Use file:// protocol for server-side loading
+                this.model = await tf.loadLayersModel(`file://${modelPath}`)
+                this.logger.info('Model loaded from File System', {path: modelPath})
+            } catch (error) {
+                this.logger.warn('Model not found on disk. Building new AI model...')
                 this.model = this.buildModel()
-                await this.model.save('indexeddb://hemobridge-matching-model')
+                // Save to file system for persistence
+                await this.model.save(`file://${path.dirname(modelPath)}`)
             }
         } catch (error) {
             this.logger.error('Failed to initialize model', error as Error)
@@ -46,7 +47,6 @@ export class AIService {
      * Build neural network model
      */
     private buildModel(): tf.LayersModel {
-        // ... (existing buildModel logic)
         const model = tf.sequential({
             layers: [
                 tf.layers.dense({
@@ -84,12 +84,8 @@ export class AIService {
         return model
     }
 
-    // ---
-    // **FIX 1:** The missing method is now added.
-    // ---
     /**
      * Update a donor's live location in the cache.
-     * This is called by the socket server.
      */
     async updateDonorLocation(userId: string, lat: number, lon: number): Promise<void> {
         this.donorLocations.set(userId, {lat, lon});
@@ -108,7 +104,7 @@ export class AIService {
             Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
             Math.sin(dLon / 2) * Math.sin(dLon / 2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c; // Distance in km
+        return R * c;
     }
 
     /**
@@ -118,7 +114,6 @@ export class AIService {
         request: IBloodRequest,
         donor: IDonorProfile
     ): Promise<IAIFeatureVector> {
-        // ... (existing extractFeatures logic)
         return {
             bloodTypeCompatibility: 1.0,
             rhFactorCompatibility: 1.0,
@@ -149,7 +144,6 @@ export class AIService {
      * Convert urgency level to number
      */
     private urgencyToNumber(urgency: string): number {
-        // ... (existing urgencyToNumber logic)
         const urgencyMap: Record<string, number> = {
             LOW: 1,
             MEDIUM: 2,
@@ -164,7 +158,6 @@ export class AIService {
      * Convert features to tensor array
      */
     private featuresToArray(features: IAIFeatureVector): number[] {
-        // ... (existing featuresToArray logic)
         return [
             features.bloodTypeCompatibility,
             features.rhFactorCompatibility,
@@ -186,7 +179,6 @@ export class AIService {
         request: IBloodRequest,
         donor: IDonorProfile
     ): Promise<number> {
-        // ... (existing predictMatchingScore logic)
         try {
             if (!this.model) {
                 await this.initializeModel()
@@ -211,9 +203,6 @@ export class AIService {
 
     /**
      * Autonomous matching for blood request
-     * ---
-     * **UPGRADED:** Now uses live location data for real distance calculation.
-     * ---
      */
     async autonomousMatching(requestId: string): Promise<IAIMatchingScore[]> {
         try {
@@ -235,7 +224,7 @@ export class AIService {
                     user: {blockedFromPlatform: false},
                 },
                 include: {user: true},
-                take: 100, // Get a larger pool to filter by location
+                take: 100,
             })
 
             // Score each donor
@@ -271,11 +260,11 @@ export class AIService {
                     scores.push({
                         donorId: donor.user?.id || '',
                         userId: donor.userId,
-                        distance: distance, // Real distance
+                        distance: distance,
                         aiScore,
                         reputation: donor.aiReputationScore,
                         compatibilityScore: 1.0,
-                        distanceScore: distanceScore, // Real score
+                        distanceScore: distanceScore,
                         reputationScore: donor.aiReputationScore,
                         availabilityScore: 0.9,
                         responseScore: Math.max(0, 1.0 - (donor.avgResponseTime || 0) / 3600),
