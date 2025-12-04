@@ -1,9 +1,10 @@
-// src/services/matching.service.ts
+// src/lib/services/matching.service.ts
 
 import {prisma} from '@/lib/prisma'
 import {Logger} from '@/lib/utils/logger'
 import {GeoUtil} from '@/lib/utils/geo-util'
 import * as tf from '@tensorflow/tfjs'
+import path from 'path' // PATCH: Added import
 import type {BloodRequest, Donation, DonorProfile, RequestMatch, User} from '@prisma/client'
 
 interface MatchingFeatures {
@@ -24,7 +25,6 @@ interface AutomatchResult {
     features: MatchingFeatures
 }
 
-// Extended types to match actual database structure
 type DonorProfileWithRelations = DonorProfile & {
     user: User | null
     donations: Donation[]
@@ -41,14 +41,22 @@ export class MatchingService {
 
     async initializeModel(): Promise<void> {
         try {
-            this.model = await tf.loadLayersModel(
-                'indexeddb://bloodchain-matching-model'
-            )
-            logger.info('✅ ML model loaded from IndexedDB')
+            // PATCH: Use file system path for server-side
+            const modelPath = path.join(process.cwd(), 'ml-models/trained/model.json');
+
+            try {
+                this.model = await tf.loadLayersModel(`file://${modelPath}`)
+                logger.info('✅ ML model loaded from File System')
+            } catch (error) {
+                logger.warn('Creating new ML model (Model file not found)...')
+                this.model = this.buildModel()
+                // Save to file system
+                await this.model.save(`file://${path.dirname(modelPath)}`)
+            }
         } catch (error) {
-            logger.warn('Creating new ML model...')
+            logger.error('Failed to initialize model', error as Error)
+            // Fallback to building a fresh model in memory if loading fails prevents crash
             this.model = this.buildModel()
-            await this.model.save('indexeddb://bloodchain-matching-model')
         }
     }
 
