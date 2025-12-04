@@ -1,8 +1,11 @@
+// src/lib/services/ai.service.ts
+
 import * as tf from '@tensorflow/tfjs'
 import {prisma} from '@/lib/prisma'
 import {Logger} from '@/lib/utils/logger'
 import {IAIFeatureVector, IAIMatchingScore, IBloodRequest, IDonorProfile,} from '@/types'
-import path from 'path' // Added import
+import path from 'path'
+import fs from "fs";
 
 /**
  * AI MATCHING SERVICE
@@ -12,7 +15,6 @@ import path from 'path' // Added import
 export class AIService {
     private logger: Logger = new Logger('AIService')
     private model: tf.LayersModel | null = null
-    // Cache to store live donor locations
     private donorLocations: Map<string, { lat: number, lon: number }> = new Map();
 
     /**
@@ -24,23 +26,71 @@ export class AIService {
 
             this.logger.info('Initializing AI model...')
 
-            // PATCH: Load from file system instead of IndexedDB for Server Environment
-            const modelPath = path.join(process.cwd(), 'ml-models/trained/model.json');
-            // Check if model exists effectively or handle load error
+            const modelDir = path.join(process.cwd(), 'ml-models/trained');
+            const modelJsonPath = path.join(modelDir, 'model.json');
+            const weightsPath = path.join(modelDir, 'weights.bin');
+
             try {
-                // Use file:// protocol for server-side loading
-                this.model = await tf.loadLayersModel(`file://${modelPath}`)
-                this.logger.info('Model loaded from File System', {path: modelPath})
+                if (fs.existsSync(modelJsonPath) && fs.existsSync(weightsPath)) {
+                    try {
+                        // 1. Read and parse model.json
+                        const modelJson = JSON.parse(fs.readFileSync(modelJsonPath, 'utf8'));
+
+                        // 2. Read weights file
+                        const weightsBuffer = fs.readFileSync(weightsPath);
+                        // Convert Node Buffer to ArrayBuffer
+                        const weightsArrayBuffer = weightsBuffer.buffer.slice(
+                            weightsBuffer.byteOffset,
+                            weightsBuffer.byteOffset + weightsBuffer.byteLength
+                        );
+
+                        // 3. Extract weight specs from the manifest
+                        // model.json structure: { modelTopology: ..., weightsManifest: [{ weights: [...] }] }
+                        const weightSpecs = modelJson.weightsManifest?.[0]?.weights;
+
+                        if (!weightSpecs) {
+                            throw new Error('Invalid model.json: missing weightsManifest');
+                        }
+
+                        // 4. Load using tf.io.fromMemory with 3 arguments
+                        // Signature: (modelTopology, weightSpecs, weightData)
+                        const loadHandler = tf.io.fromMemory(
+                            modelJson.modelTopology,
+                            weightSpecs,
+                            weightsArrayBuffer
+                        );
+
+                        this.model = await tf.loadLayersModel(loadHandler);
+                        this.logger.info('Model loaded from File System (Manual Handler)')
+                    } catch (loadError) {
+                        this.logger.error('Failed to load model from disk', loadError as Error);
+                        this.createFallbackModel();
+                    }
+                } else {
+                    this.logger.warn('Model files not found. Creating fallback model...');
+                    this.createFallbackModel();
+                }
             } catch (error) {
-                this.logger.warn('Model not found on disk. Building new AI model...')
+                this.logger.warn('Model not found on disk. Building new AI model...', {error: (error as Error).message})
                 this.model = this.buildModel()
-                // Save to file system for persistence
-                await this.model.save(`file://${path.dirname(modelPath)}`)
+                // Save attempt (will fail if tfjs-node is missing, but app will continue with in-memory model)
+                try {
+                    await this.model.save(`file://${path.dirname(modelJsonPath)}`)
+                } catch (e) {
+                    this.logger.warn('Could not save model to disk (missing tfjs-node fs handler?)');
+                }
             }
         } catch (error) {
             this.logger.error('Failed to initialize model', error as Error)
             throw error
         }
+    }
+
+
+    private createFallbackModel() {
+        this.model = this.buildModel();
+        // We do not save to disk here to avoid write permission issues in some containers
+        this.logger.info('Fallback in-memory model created');
     }
 
     /**
@@ -84,19 +134,13 @@ export class AIService {
         return model
     }
 
-    /**
-     * Update a donor's live location in the cache.
-     */
     async updateDonorLocation(userId: string, lat: number, lon: number): Promise<void> {
         this.donorLocations.set(userId, {lat, lon});
         this.logger.debug('Updated donor location cache', {userId});
     }
 
-    /**
-     * Calculates distance between two lat/lon points in km (Haversine formula)
-     */
     private getDistanceInKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-        const R = 6371; // Radius of the Earth in km
+        const R = 6371;
         const dLat = (lat2 - lat1) * Math.PI / 180;
         const dLon = (lon2 - lon1) * Math.PI / 180;
         const a =
@@ -107,9 +151,6 @@ export class AIService {
         return R * c;
     }
 
-    /**
-     * Extract features from donor and request
-     */
     private async extractFeatures(
         request: IBloodRequest,
         donor: IDonorProfile
@@ -140,9 +181,6 @@ export class AIService {
         }
     }
 
-    /**
-     * Convert urgency level to number
-     */
     private urgencyToNumber(urgency: string): number {
         const urgencyMap: Record<string, number> = {
             LOW: 1,
@@ -154,9 +192,6 @@ export class AIService {
         return urgencyMap[urgency] || 1
     }
 
-    /**
-     * Convert features to tensor array
-     */
     private featuresToArray(features: IAIFeatureVector): number[] {
         return [
             features.bloodTypeCompatibility,
@@ -172,9 +207,6 @@ export class AIService {
         ]
     }
 
-    /**
-     * Predict matching score using ML model
-     */
     async predictMatchingScore(
         request: IBloodRequest,
         donor: IDonorProfile
@@ -201,9 +233,6 @@ export class AIService {
         }
     }
 
-    /**
-     * Autonomous matching for blood request
-     */
     async autonomousMatching(requestId: string): Promise<IAIMatchingScore[]> {
         try {
             this.logger.info('Running autonomous matching', {requestId})
@@ -216,7 +245,6 @@ export class AIService {
                 throw new Error('Request not found or has no location')
             }
 
-            // Find compatible donors
             const donors = await prisma.donorProfile.findMany({
                 where: {
                     bloodType: request.bloodType,
@@ -227,19 +255,15 @@ export class AIService {
                 take: 100,
             })
 
-            // Score each donor
             const scores: IAIMatchingScore[] = []
 
             for (const donor of donors) {
-                // Get donor's live location from cache
                 const donorLocation = this.donorLocations.get(donor.userId);
 
-                // Skip donor if they have no live location
                 if (!donorLocation) {
                     continue;
                 }
 
-                // Calculate real distance
                 const distance = this.getDistanceInKm(
                     request.latitude,
                     request.longitude,
@@ -247,7 +271,6 @@ export class AIService {
                     donorLocation.lon
                 );
 
-                // Skip donor if they are outside the request radius
                 if (distance > request.radius) {
                     continue;
                 }
@@ -255,7 +278,6 @@ export class AIService {
                 const aiScore = await this.predictMatchingScore(request as IBloodRequest, donor as IDonorProfile)
                 const distanceScore = Math.max(0, 1 - (distance / request.radius));
 
-                // Only consider high-potential matches
                 if (aiScore > 0.7) {
                     scores.push({
                         donorId: donor.user?.id || '',
@@ -268,7 +290,6 @@ export class AIService {
                         reputationScore: donor.aiReputationScore,
                         availabilityScore: 0.9,
                         responseScore: Math.max(0, 1.0 - (donor.avgResponseTime || 0) / 3600),
-                        // Overall score now weights distance
                         overallScore: aiScore * 0.6 + distanceScore * 0.4,
                     })
                 }

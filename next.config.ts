@@ -6,7 +6,8 @@ const nextConfig: NextConfig = {
     output: "standalone",
     typescript: {
         ignoreBuildErrors: true,
-    }
+    },
+    serverExternalPackages: ['@tensorflow/tfjs-node'],
 };
 
 export default nextConfig;
