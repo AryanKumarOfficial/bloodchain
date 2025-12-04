@@ -1,15 +1,15 @@
-import { NextResponse } from "next/server"
+import {NextResponse} from "next/server"
 import prisma from "@/lib/prisma"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { requestSchema } from "@/schemas/requestSchema"
-import { RequestStatus } from "@prisma/client"
+import {getServerSession} from "next-auth"
+import {authOptions} from "@/lib/auth"
+import {requestSchema} from "@/schemas/requestSchema"
+import {RequestStatus} from "@prisma/client"
 
 export async function POST(req: Request) {
     try {
         const session = await getServerSession(authOptions)
         if (!session?.user?.id) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+            return NextResponse.json({error: "Unauthorized"}, {status: 401})
         }
 
         const body = await req.json()
@@ -30,10 +30,10 @@ export async function POST(req: Request) {
             },
         })
 
-        return NextResponse.json({ data: newRequest })
+        return NextResponse.json({data: newRequest})
     } catch (err) {
         console.error("POST /api/requests ERROR:", err)
-        return NextResponse.json({ error: "Failed to create request" }, { status: 500 })
+        return NextResponse.json({error: "Failed to create request"}, {status: 500})
     }
 }
 
@@ -41,17 +41,27 @@ export async function GET() {
     try {
         const session = await getServerSession(authOptions)
         if (!session?.user?.id) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+            return NextResponse.json({error: "Unauthorized"}, {status: 401})
         }
 
         const requests = await prisma.bloodRequest.findMany({
-            where: { recipientId: session.user.id },
-            orderBy: { createdAt: "desc" },
+            where: {recipientId: session.user.id},
+            include: {
+                recipient: {
+                    select: {
+                        name: true,
+                        email: true,
+                        phone: true,
+                    }
+                },
+                RecipientProfile: true
+            },
+            orderBy: {createdAt: "desc"},
         })
-
-        return NextResponse.json({ data: requests })
+        console.log(`request`, requests)
+        return NextResponse.json({data: requests})
     } catch (err) {
         console.error("GET /api/requests ERROR:", err)
-        return NextResponse.json({ error: "Unable to fetch requests" }, { status: 500 })
+        return NextResponse.json({error: "Unable to fetch requests"}, {status: 500})
     }
 }
