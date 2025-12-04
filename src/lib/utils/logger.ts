@@ -1,9 +1,9 @@
-// lib/utils/logger.ts
+// src/lib/utils/logger.ts
 
-import { LogLevel, ILogEntry } from '@/types/logger'
+import {LogLevel, ILogEntry} from '@/types/logger'
 import fs from 'node:fs'
 import path from 'node:path'
-import { env, isProd } from '@/lib/env'
+import {env, isProd} from '@/lib/env'
 
 /**
  * COMPREHENSIVE LOGGING SERVICE
@@ -18,13 +18,22 @@ export class Logger {
     constructor(service: string) {
         this.service = service
         this.logDir = env.LOG_DIR || './logs'
-        this.logToFile = (env.LOG_TO_FILE === 'true')
-        this.ensureLogDirectory()
+        // PATCH: Default to FALSE in production for OCI compliance unless overridden
+        this.logToFile = env.LOG_TO_FILE === 'true'
+
+        if (this.logToFile) {
+            this.ensureLogDirectory()
+        }
     }
 
     private ensureLogDirectory(): void {
-        if (this.logToFile && !fs.existsSync(this.logDir)) {
-            fs.mkdirSync(this.logDir, { recursive: true })
+        if (!fs.existsSync(this.logDir)) {
+            try {
+                fs.mkdirSync(this.logDir, {recursive: true})
+            } catch (error) {
+                console.error('Failed to create log directory, falling back to console only:', error)
+                this.logToFile = false
+            }
         }
     }
 
@@ -34,26 +43,27 @@ export class Logger {
     }
 
     private formatLogEntry(entry: ILogEntry): string {
-        return JSON.stringify(entry, null, 2)
+        return JSON.stringify(entry)
     }
 
     private writeLog(entry: ILogEntry): void {
         const content = this.formatLogEntry(entry)
 
-        // Write to file only if explicitly enabled
+        // 1. Write to File (Optional)
         if (this.logToFile) {
             const logFile = this.getLogFile(entry.level)
             try {
                 fs.appendFileSync(logFile, content + '\n', 'utf-8')
             } catch (e) {
-                // Fallback to console if file write fails (e.g., serverless)
                 console.error('Logger file write failed:', e)
-                console.log(content)
             }
         }
 
-        // Always log to console in development; in production, log to console if file logging is disabled
-        if (!isProd || !this.logToFile) {
+        // 2. Write to Console (Standard for OCI/Docker)
+        // In production, we want structured JSON logs in stdout
+        if (entry.level === LogLevel.ERROR || entry.level === LogLevel.CRITICAL) {
+            console.error(content)
+        } else {
             console.log(content)
         }
     }
