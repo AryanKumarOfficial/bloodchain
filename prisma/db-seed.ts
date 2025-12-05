@@ -90,12 +90,14 @@ export async function seedDatabase() {
         // C. The Ambassador (Community Leader)
         await prisma.user.create({
             data: {
-                email: 'leader@community.com',
+                email: 'ambassador@community.com',
                 passwordHash: hashedPassword,
-                name: 'Community Leader',
+                name: 'Rohit Ambassador',
+                phone: '+917777777777',
                 role: 'AMBASSADOR',
                 verificationStatus: 'VERIFIED_BLOCKCHAIN',
-                totalReputationScore: 5000,
+                walletAddress: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
+                totalReputationScore: 2500,
             }
         });
         logger.info('🏅 Created Ambassador');
@@ -175,6 +177,34 @@ export async function seedDatabase() {
             createdDonors.push({user, profile});
             logger.info(`🩸 Created Donor: ${d.name}`);
         }
+
+        const verifierEligibleUser = await prisma.user.create({
+            data: {
+                email: 'eligible.verifier@test.com',
+                passwordHash: hashedPassword,
+                name: 'Suresh Eligible',
+                phone: '+916666666666',
+                role: 'DONOR',
+                verificationStatus: 'VERIFIED_BLOCKCHAIN',
+                totalReputationScore: 750, // ✅ Above 500 threshold
+            }
+        });
+
+        await prisma.donorProfile.create({
+            data: {
+                userId: verifierEligibleUser.id,
+                bloodType: 'O_POSITIVE',
+                rhFactor: 'POSITIVE',
+                isAvailable: true,
+                aiReputationScore: 0.97,
+                latitude: BASE_LAT + 0.015,
+                longitude: BASE_LNG + 0.02,
+                totalSuccessfulDonations: 3, // ✅ Minimum required
+            }
+        });
+
+        logger.info('✅ Created Verifier-Eligible Donor Profile: Suresh');
+
 
         // ==========================================
         // 4. CREATE SCENARIOS (Requests & Matches)

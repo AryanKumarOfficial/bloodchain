@@ -6,6 +6,7 @@ const logger = new Logger('CronAutonomousMatching')
 
 export async function GET(request: Request) {
     const authHeader = request.headers.get('authorization')
+    console.log(authHeader)
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
         return NextResponse.json({error: 'Unauthorized'}, {status: 401})
     }

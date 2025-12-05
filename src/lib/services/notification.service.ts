@@ -45,6 +45,16 @@ export class NotificationService {
             if (global.io) {
                 global.io.to(notification.userId).emit('notification', notification)
             }
+
+            await prisma.notification.create({
+                data: {
+                    userId: notification.userId,
+                    type: notification.type,
+                    title: notification.title,
+                    message: notification.message,
+                }
+            })
+            console.log(`Notification sent: ${notification.type}`)
         } catch (error) {
             logger.error('Failed to send in-app notification: ' + (error as Error).message)
         }
@@ -150,6 +160,13 @@ export class NotificationService {
                     await this.sendEmailNotification(donor.user.email, {
                         userId: donor.userId,
                         type: 'URGENT_REQUEST',
+                        title: `🚨 ${urgency} Blood Request Nearby!`,
+                        message: `An urgent blood request has been posted near you. Your help is needed!`,
+                        data: {requestId},
+                    })
+                    await this.sendInAppNotification({
+                        userId: donor.userId,
+                        type: "URGENT_REQUEST",
                         title: `🚨 ${urgency} Blood Request Nearby!`,
                         message: `An urgent blood request has been posted near you. Your help is needed!`,
                         data: {requestId},

@@ -16,7 +16,7 @@ const PUBLIC_PATHS = [
 const ROLE_REQUIRED: Record<string, string> = {
     "/dashboard/verifier": "VERIFIER",
     "/dashboard/ambassador": "AMBASSADOR",
-    "/admin": "ADMIN",
+    "/admin": "AMBASSADOR",
 }
 
 const VERIFICATION_REQUIRED = [

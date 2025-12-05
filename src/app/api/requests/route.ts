@@ -45,7 +45,12 @@ export async function GET() {
         }
 
         const requests = await prisma.bloodRequest.findMany({
-            where: {recipientId: session.user.id},
+            where: {
+                recipient: {
+                    id: session?.user?.id,
+                },
+                status: RequestStatus.OPEN
+            },
             include: {
                 recipient: {
                     select: {

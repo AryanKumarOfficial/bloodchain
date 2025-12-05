@@ -1,6 +1,6 @@
 "use client"
 
-import { useQuery, useMutation } from "@tanstack/react-query"
+import {useQuery, useMutation} from "@tanstack/react-query"
 
 interface ActiveRequest {
     id: string
@@ -28,20 +28,26 @@ export function useActiveRequests() {
 }
 
 // ---- EXAMPLE: create blood request hook (if you don’t already have it) ----
-import type { z } from "zod"
-import { requestSchema } from "@/schemas/requestSchema" // or where you keep it
+import type {z} from "zod"
+import {requestSchema} from "@/schemas/requestSchema" // or where you keep it
 
 type CreateRequestInput = z.infer<typeof requestSchema>
 
 export function useCreateBloodRequest() {
     return useMutation({
         mutationFn: async (payload: CreateRequestInput) => {
-            const res = await fetch("/api/requests", {
+            const res = await fetch("/api/blood-requests/create", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    ...payload,
+                    unitsNeeded: payload.units
+                }),
             })
-            if (!res.ok) throw new Error("Failed to create blood request")
+            if (!res.ok) {
+                const err = await res.json()
+                throw new Error(err.error || "Failed to create request")
+            }
             return res.json()
         },
     })

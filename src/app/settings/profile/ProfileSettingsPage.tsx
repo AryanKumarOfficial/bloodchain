@@ -1,20 +1,22 @@
 'use client'
 
-import { useForm } from 'react-hook-form'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Switch } from '@/components/ui/switch'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { useMutation } from '@tanstack/react-query'
-import { Loader2 } from 'lucide-react'
-import type { Session } from 'next-auth'
-import { useEffect } from 'react'
+import {useForm} from 'react-hook-form'
+import {Button} from '@/components/ui/button'
+import {Input} from '@/components/ui/input'
+import {Label} from '@/components/ui/label'
+import {Textarea} from '@/components/ui/textarea'
+import {Switch} from '@/components/ui/switch'
+import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
+import {useMutation} from '@tanstack/react-query'
+import {Loader2} from 'lucide-react'
+import type {Session} from 'next-auth'
+import {useEffect} from 'react'
+import {useRouter} from "next/navigation";
 
-export default function ProfileSettingsPage({ session }: { session: Session }) {
+export default function ProfileSettingsPage({session}: { session: Session }) {
+    const router = useRouter()
 
-    const { register, handleSubmit, reset, formState: { isDirty, isSubmitting } } = useForm({
+    const {register, handleSubmit, reset, formState: {isDirty, isSubmitting}} = useForm({
         defaultValues: {
             name: '',
             phone: '',
@@ -39,7 +41,7 @@ export default function ProfileSettingsPage({ session }: { session: Session }) {
         mutationFn: async (data: any) => {
             const res = await fetch('/api/profile', {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(data)
             })
             if (!res.ok) throw new Error('Failed to update')
@@ -76,18 +78,19 @@ export default function ProfileSettingsPage({ session }: { session: Session }) {
                         <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-2">
                                 <Label htmlFor="phone">Phone Number</Label>
-                                <Input id="phone" type="tel" {...register('phone')} placeholder="+1234567890" />
+                                <Input id="phone" type="tel" {...register('phone')} placeholder="+1234567890"/>
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="city">City</Label>
-                                <Input id="city" {...register('city')} placeholder="New York" />
+                                <Input id="city" {...register('city')} placeholder="New York"/>
                             </div>
                         </div>
 
                         {/* Bio */}
                         <div className="grid gap-2">
                             <Label htmlFor="bio">Medical Note / Bio</Label>
-                            <Textarea id="bio" {...register('bio')} placeholder="Any relevant medical history or notes..." />
+                            <Textarea id="bio" {...register('bio')}
+                                      placeholder="Any relevant medical history or notes..."/>
                         </div>
 
                         {/* Donor Availability */}
@@ -99,16 +102,23 @@ export default function ProfileSettingsPage({ session }: { session: Session }) {
                                         Turn off to stop receiving donation requests temporarily.
                                     </div>
                                 </div>
-                                <Switch {...register("isAvailable")} defaultChecked />
+                                <Switch {...register("isAvailable")} defaultChecked/>
                             </div>
                         )}
                     </CardContent>
                 </Card>
 
                 <div className="flex justify-end gap-4">
-                    <Button type="button" variant="ghost">Cancel</Button>
+                    <Button type="button" onClick={() => {
+                        if (window.history.length > 1) {
+                            router.back()
+                        } else {
+                            router.push('/dashboard')
+                        }
+                    }}
+                            variant="ghost">Cancel</Button>
                     <Button type="submit" disabled={isSubmitting || !isDirty}>
-                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                         Save Changes
                     </Button>
                 </div>
